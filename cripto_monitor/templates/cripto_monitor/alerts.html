@@ -1,0 +1,74 @@
+{% extends 'cripto_monitor/base.html' %}
+
+{% block content %}
+<h1>Alertas de Preço</h1>
+<div class="row">
+    {# Formulário para cadastrar um alerta novo vinculado ao usuário logado. #}
+    <div class="col-lg-5">
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Novo alerta</h5>
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    {{ form.as_p }}
+                    <button type="submit" class="btn btn-primary">Salvar alerta</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    {# Lista os alertas existentes e mostra se cada um está ativo, inativo ou disparado. #}
+    <div class="col-lg-7">
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Alertas cadastrados</h5>
+                {% if alerts %}
+                <div class="table-responsive">
+                    <table class="table align-middle">
+                        <thead>
+                            <tr>
+                                <th>Moeda</th>
+                                <th>Tipo</th>
+                                <th>Limite</th>
+                                <th>Preço atual</th>
+                                <th>Status</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for alert in alerts %}
+                            {# Cada alerta compara o preço atual da moeda com o limite definido em BRL. #}
+                            <tr>
+                                <td>{{ alert.asset.symbol }}</td>
+                                <td>{{ alert.get_alert_type_display }}</td>
+                                <td>R$ {{ alert.threshold_brl|floatformat:2 }}</td>
+                                <td>R$ {{ alert.asset.last_price_brl|floatformat:2 }}</td>
+                                <td>
+                                    {% if alert.triggered %}
+                                        <span class="badge bg-success">Disparado</span>
+                                    {% elif not alert.active %}
+                                        <span class="badge bg-secondary">Inativo</span>
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark">Ativo</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {# A marcação manual ajuda quando o usuário quer registrar o alerta como concluído. #}
+                                    {% if not alert.triggered and alert.active %}
+                                        <a href="{% url 'cripto_monitor:trigger_alert' alert.pk %}" class="btn btn-sm btn-outline-primary">Marcar disparado</a>
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                    <p>Nenhum alerta registrado.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

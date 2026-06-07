@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cripto Monitor</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        /* Largura fixa da navegação lateral em telas desktop. */
+        :root {
+            --app-sidebar-width: 264px;
+        }
+
+        body {
+            min-height: 100vh;
+        }
+
+        .app-shell {
+            min-height: 100vh;
+        }
+
+        /* Sidebar principal: fica fixa à esquerda e acompanha toda a altura da janela. */
+        .app-sidebar {
+            position: fixed;
+            inset: 0 auto 0 0;
+            width: var(--app-sidebar-width);
+            background: #111318;
+            color: #f8f9fa;
+            border-right: 1px solid #2a2f38;
+            display: flex;
+            flex-direction: column;
+            z-index: 1030;
+        }
+
+        /* Bloco de marca reutilizado na sidebar desktop e no topo mobile. */
+        .app-brand {
+            display: flex;
+            align-items: center;
+            gap: .9rem;
+            padding: 1.1rem 1rem;
+            color: #fff;
+            text-decoration: none;
+            border-bottom: 1px solid #2a2f38;
+        }
+
+        .app-brand:hover,
+        .app-brand:focus {
+            color: #fff;
+        }
+
+        .app-logo {
+            width: 70px;
+            height: 70px;
+            border-radius: 14px;
+            object-fit: cover;
+            border: 1px solid rgba(229, 178, 73, .55);
+        }
+
+        /* No desktop o logo ganha destaque, ocupando a largura útil da lateral. */
+        .app-sidebar .app-brand {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: .75rem;
+            padding: 1rem;
+        }
+
+        .app-sidebar .app-logo {
+            width: 100%;
+            height: auto;
+            aspect-ratio: 1;
+            object-fit: contain;
+        }
+
+        .app-brand-text {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.05;
+        }
+
+        .app-brand-title {
+            font-size: 1.12rem;
+            font-weight: 800;
+        }
+
+        .app-brand-subtitle {
+            color: #d7a846;
+            font-size: .72rem;
+            font-weight: 700;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+
+        /* Navegação principal do sistema e link externo de ranking. */
+        .app-nav {
+            display: flex;
+            flex-direction: column;
+            gap: .35rem;
+            padding: 1rem .75rem;
+        }
+
+        .app-nav-link {
+            color: #c7ccd4;
+            text-decoration: none;
+            font-weight: 700;
+            border-radius: 8px;
+            padding: .7rem .85rem;
+            display: flex;
+            align-items: center;
+            gap: .65rem;
+        }
+
+        .app-nav-link:hover,
+        .app-nav-link:focus {
+            color: #fff;
+            background: #20242d;
+        }
+
+        .app-nav-icon {
+            width: 1.35rem;
+            color: #d7a846;
+            text-align: center;
+            font-size: .8rem;
+            font-weight: 900;
+        }
+
+        /* Crédito visível para fonte externa usada no link do ranking CryptoCompare. */
+        .app-nav-attribution {
+            color: #8993a3;
+            font-size: .72rem;
+            line-height: 1.35;
+            padding: .35rem .85rem 0;
+        }
+
+        .app-nav-attribution a {
+            color: #d7a846;
+            text-decoration: none;
+            font-weight: 700;
+        }
+
+        .app-nav-attribution a:hover,
+        .app-nav-attribution a:focus {
+            color: #f0c669;
+            text-decoration: underline;
+        }
+
+        /* Rodapé da sidebar com usuário, login/logout e alternância de tema. */
+        .app-sidebar-footer {
+            margin-top: auto;
+            padding: .85rem .75rem 1rem;
+            border-top: 1px solid #2a2f38;
+        }
+
+        .app-user {
+            color: #c7ccd4;
+            font-size: .88rem;
+            margin-bottom: .65rem;
+            padding: 0 .85rem;
+        }
+
+        /* Conteúdo principal recua para não ficar embaixo da sidebar fixa. */
+        .app-content {
+            margin-left: var(--app-sidebar-width);
+            min-height: 100vh;
+        }
+
+        /* Topbar usada apenas em tablets/celulares. */
+        .app-mobile-topbar {
+            display: none;
+            background: #111318;
+            border-bottom: 1px solid #2a2f38;
+        }
+
+        /* Abaixo de 992px a sidebar fixa é substituída por um menu recolhível. */
+        @media (max-width: 991.98px) {
+            .app-sidebar {
+                position: static;
+                width: 100%;
+                min-height: auto;
+                border-right: 0;
+                border-bottom: 1px solid #2a2f38;
+            }
+
+            .app-sidebar.is-desktop {
+                display: none;
+            }
+
+            .app-mobile-topbar {
+                display: block;
+            }
+
+            .app-content {
+                margin-left: 0;
+            }
+
+            .app-mobile-menu {
+                background: #111318;
+                border-bottom: 1px solid #2a2f38;
+            }
+        }
+
+        /* No desktop escondemos os elementos exclusivos do menu mobile. */
+        @media (min-width: 992px) {
+            .app-mobile-topbar,
+            .app-mobile-menu {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="app-shell">
+    {# Menu lateral desktop: contém marca, navegação principal, link externo e usuário. #}
+    <aside class="app-sidebar is-desktop" aria-label="Menu principal">
+        <a class="app-brand" href="{% url 'cripto_monitor:dashboard' %}">
+            <img class="app-logo" src="{% static 'cripto_monitor/GDH_CRIPTO.png' %}" alt="GDH Cripto">
+            <span class="app-brand-text">
+                <span class="app-brand-title">GDH Cripto</span>
+                <span class="app-brand-subtitle">Monitor</span>
+            </span>
+        </a>
+        <nav class="app-nav">
+            <a class="app-nav-link" href="{% url 'cripto_monitor:dashboard' %}"><span class="app-nav-icon">D</span>Dashboard</a>
+            <a class="app-nav-link" href="{% url 'cripto_monitor:simulations' %}"><span class="app-nav-icon">S</span>Simulações</a>
+            <a class="app-nav-link" href="{% url 'cripto_monitor:alerts' %}"><span class="app-nav-icon">A</span>Alertas</a>
+            <a class="app-nav-link" href="https://www.cryptocompare.com/coins/list/all/USD/1" target="_blank" rel="noopener noreferrer nofollow"><span class="app-nav-icon">R</span>Ranking CryptoCompare</a>
+            <div class="app-nav-attribution">
+                Fonte externa: <a href="https://www.cryptocompare.com/" target="_blank" rel="noopener noreferrer nofollow">CryptoCompare</a>, powered by CoinDesk Data. © Crypto Coin Comparison Ltd.
+            </div>
+        </nav>
+        <div class="app-sidebar-footer">
+            {% if user.is_authenticated %}
+                <div class="app-user">{{ user.username }}</div>
+                <a class="app-nav-link" href="{% url 'logout' %}"><span class="app-nav-icon">L</span>Sair</a>
+            {% else %}
+                <a class="app-nav-link" href="{% url 'login' %}"><span class="app-nav-icon">E</span>Entrar</a>
+            {% endif %}
+            <button id="theme-toggle" class="btn btn-sm btn-outline-light w-100 mt-2" aria-label="Alternar tema">Tema</button>
+        </div>
+    </aside>
+
+    {# Menu mobile: usa collapse do Bootstrap para economizar espaço no topo da tela. #}
+    <div class="app-mobile-topbar">
+        <div class="d-flex align-items-center justify-content-between gap-3 px-3 py-2">
+            <a class="app-brand border-0 p-0" href="{% url 'cripto_monitor:dashboard' %}">
+                <img class="app-logo" src="{% static 'cripto_monitor/GDH_CRIPTO.png' %}" alt="GDH Cripto">
+                <span class="app-brand-text">
+                    <span class="app-brand-title">GDH Cripto</span>
+                    <span class="app-brand-subtitle">Monitor</span>
+                </span>
+            </a>
+            <button class="btn btn-outline-light btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#mobileSidebarMenu" aria-controls="mobileSidebarMenu" aria-expanded="false" aria-label="Abrir menu">
+                Menu
+            </button>
+        </div>
+        <div class="collapse app-mobile-menu" id="mobileSidebarMenu">
+            <nav class="app-nav">
+                <a class="app-nav-link" href="{% url 'cripto_monitor:dashboard' %}"><span class="app-nav-icon">D</span>Dashboard</a>
+                <a class="app-nav-link" href="{% url 'cripto_monitor:simulations' %}"><span class="app-nav-icon">S</span>Simulações</a>
+                <a class="app-nav-link" href="{% url 'cripto_monitor:alerts' %}"><span class="app-nav-icon">A</span>Alertas</a>
+                <a class="app-nav-link" href="https://www.cryptocompare.com/coins/list/all/USD/1" target="_blank" rel="noopener noreferrer nofollow"><span class="app-nav-icon">R</span>Ranking CryptoCompare</a>
+                <div class="app-nav-attribution">
+                    Fonte externa: <a href="https://www.cryptocompare.com/" target="_blank" rel="noopener noreferrer nofollow">CryptoCompare</a>, powered by CoinDesk Data. © Crypto Coin Comparison Ltd.
+                </div>
+                {% if user.is_authenticated %}
+                    <span class="app-user">{{ user.username }}</span>
+                    <a class="app-nav-link" href="{% url 'logout' %}"><span class="app-nav-icon">L</span>Sair</a>
+                {% else %}
+                    <a class="app-nav-link" href="{% url 'login' %}"><span class="app-nav-icon">E</span>Entrar</a>
+                {% endif %}
+                <button id="theme-toggle-mobile" class="btn btn-sm btn-outline-light mx-3 mb-3" aria-label="Alternar tema">Tema</button>
+            </nav>
+        </div>
+    </div>
+
+    {# Área onde cada página filha injeta seu conteúdo pelo bloco content. #}
+    <main class="app-content">
+        <div class="container-fluid px-3 px-lg-4 py-4">
+            {# Mensagens do Django, como sucesso/erro após ações do usuário. #}
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1nqEd00jl6rU4sGO4F5p4eIt16gG" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+    // Alterna entre tema claro e escuro usando o atributo data-bs-theme do Bootstrap.
+    (function(){
+        const toggles = document.querySelectorAll('#theme-toggle, #theme-toggle-mobile');
+        const root = document.documentElement;
+        function setTheme(theme){
+            root.setAttribute('data-bs-theme', theme);
+            try{ localStorage.setItem('theme', theme); }catch(e){}
+            toggles.forEach((toggle) => {
+                toggle.textContent = theme === 'dark' ? 'Tema claro' : 'Tema escuro';
+            });
+        }
+        // Mantém a preferência salva no navegador entre visitas.
+        const saved = (function(){ try{ return localStorage.getItem('theme'); }catch(e){ return null; } })() || 'light';
+        setTheme(saved);
+        toggles.forEach((toggle) => {
+            toggle.addEventListener('click', () => {
+                const current = root.getAttribute('data-bs-theme') === 'dark' ? 'dark' : 'light';
+                setTheme(current === 'dark' ? 'light' : 'dark');
+            });
+        });
+    })();
+</script>
+{% block extra_scripts %}{% endblock %}
+</body>
+</html>

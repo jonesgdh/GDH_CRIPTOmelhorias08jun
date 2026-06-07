@@ -1,0 +1,45 @@
+{% extends 'cripto_monitor/base.html' %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <h2>Entrar</h2>
+        <form method="post">
+            {% csrf_token %}
+            <div class="mb-3">
+                <label for="id_username" class="form-label">Usuário</label>
+                <input type="text" name="username" autofocus required id="id_username" class="form-control">
+            </div>
+            <div class="mb-3">
+                <label for="id_password" class="form-label">Senha</label>
+                <div class="input-group">
+                    <input type="password" name="password" required id="id_password" class="form-control">
+                    <button type="button" id="toggle-password" class="btn btn-outline-secondary" aria-label="Mostrar senha">🔒</button>
+                </div>
+            </div>
+            <button class="btn btn-primary" type="submit">Entrar</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+    const pw = document.getElementById('id_password');
+    const btn = document.getElementById('toggle-password');
+    if(!pw || !btn) return;
+    btn.addEventListener('click', function(){
+        if(pw.type === 'password'){
+            pw.type = 'text';
+            btn.textContent = '🔓';
+            btn.setAttribute('aria-label','Ocultar senha');
+        } else {
+            pw.type = 'password';
+            btn.textContent = '🔒';
+            btn.setAttribute('aria-label','Mostrar senha');
+        }
+    });
+});
+</script>
+{% endblock %}

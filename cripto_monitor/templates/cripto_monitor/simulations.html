@@ -1,0 +1,88 @@
+{% extends 'cripto_monitor/base.html' %}
+
+{% block content %}
+<h1>Simulações de Investimento</h1>
+<div class="row">
+    {# Formulário usado tanto para criar uma simulação nova quanto para editar uma existente. #}
+    <div class="col-lg-5">
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <h5 class="card-title">{% if editing_simulation %}Alterar Simulação{% else %}Nova Simulação{% endif %}</h5>
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    {# Quando há edição, enviamos o id para a view atualizar o registro correto. #}
+                    {% if editing_simulation %}
+                        <input type="hidden" name="simulation_id" value="{{ editing_simulation.pk }}">
+                    {% endif %}
+                    {{ form.as_p }}
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button type="submit" class="btn btn-primary">
+                            {% if editing_simulation %}Salvar alterações{% else %}Criar simulação{% endif %}
+                        </button>
+                        {% if editing_simulation %}
+                            <a href="{% url 'cripto_monitor:simulations' %}" class="btn btn-outline-secondary">Limpar formulário</a>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {# Resumo das simulações salvas pelo usuário logado. #}
+    <div class="col-lg-7">
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Resumo das Simulações</h5>
+                {% if simulations %}
+                <div class="table-responsive">
+                    <table class="table align-middle">
+                        <thead>
+                            <tr>
+                                <th>Moeda</th>
+                                <th>Investido</th>
+                                <th>Compra</th>
+                                <th>Qtd. simulada</th>
+                                <th>Valor atual</th>
+                                <th>Lucro/Prejuízo</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for sim in simulations %}
+                            {# O valor atual e lucro/prejuízo são propriedades calculadas no model Simulation. #}
+                            <tr>
+                                <td>{{ sim.asset.symbol }}</td>
+                                <td>R$ {{ sim.invested_amount_brl|floatformat:2 }}</td>
+                                <td>R$ {{ sim.purchased_price_brl|floatformat:2 }} em {{ sim.buy_date|date:'d/m/Y' }}</td>
+                                <td>{{ sim.crypto_amount|floatformat:6 }}</td>
+                                <td>R$ {{ sim.current_value_brl|floatformat:2 }}</td>
+                                <td>
+                                    {% if sim.gain_loss_brl >= 0 %}
+                                        <span class="text-success">R$ {{ sim.gain_loss_brl|floatformat:2 }} (+{{ sim.gain_loss_percentage|floatformat:2 }}%)</span>
+                                    {% else %}
+                                        <span class="text-danger">R$ {{ sim.gain_loss_brl|floatformat:2 }} ({{ sim.gain_loss_percentage|floatformat:2 }}%)</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        {# Editar recarrega a página com os dados da simulação preenchidos no formulário. #}
+                                        <a href="{% url 'cripto_monitor:simulations' %}?edit={{ sim.pk }}" class="btn btn-sm btn-outline-primary">Editar</a>
+                                        {# Remoção usa POST com CSRF para evitar exclusão por link acidental. #}
+                                        <form method="post" action="{% url 'cripto_monitor:delete_simulation' sim.pk %}" onsubmit="return confirm('Limpar esta simulação?');">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">Limpar</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                    <p>Nenhuma simulação cadastrada ainda.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

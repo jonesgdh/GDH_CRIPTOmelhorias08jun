@@ -1,0 +1,804 @@
+{% extends 'cripto_monitor/base.html' %}
+
+{% block content %}
+<style>
+    /* Estrutura visual do gráfico principal em tema escuro. */
+    .market-chart-shell {
+        background: #111318;
+        color: #fff;
+        border: 1px solid #20242d;
+        border-radius: 8px;
+        padding: clamp(1rem, 2vw, 1.75rem);
+    }
+
+    .market-breadcrumb {
+        color: #77839f;
+        font-size: .88rem;
+        font-weight: 600;
+    }
+
+    .market-breadcrumb span + span::before {
+        content: "/";
+        color: #667085;
+        margin: 0 .95rem;
+        font-weight: 400;
+    }
+
+    .verified-badge {
+        background: #162b65;
+        color: #8fb0ff;
+        border-radius: 6px;
+        font-size: .75rem;
+        font-weight: 700;
+        padding: .25rem .45rem;
+    }
+
+    .market-symbol {
+        color: #7f8ca8;
+    }
+
+    .market-change-positive {
+        color: #2de083;
+    }
+
+    .market-change-negative {
+        color: #ff3b55;
+    }
+
+    /* Cartões com leitura rápida do mercado no período selecionado. */
+    .market-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: .85rem;
+    }
+
+    .market-summary-card {
+        min-height: 112px;
+        border: 1px solid #dde3ec;
+        border-radius: 8px;
+        background: var(--bs-body-bg);
+        padding: .95rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        box-shadow: 0 8px 22px rgba(20, 27, 38, .06);
+    }
+
+    .market-summary-label {
+        color: #687386;
+        font-size: .76rem;
+        font-weight: 800;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
+
+    .market-summary-value {
+        color: var(--bs-body-color);
+        font-size: clamp(1.2rem, 2vw, 1.55rem);
+        font-weight: 900;
+        line-height: 1.08;
+    }
+
+    .market-summary-meta {
+        color: #687386;
+        font-size: .82rem;
+        font-weight: 700;
+    }
+
+    /* Faixa rolante de cotações; os itens são duplicados no HTML para criar loop contínuo. */
+    .quote-ticker {
+        border-left: 4px solid #d7e9fb;
+        background: #f8f9fb;
+        color: #20242d;
+        overflow: hidden;
+        min-height: 34px;
+        display: flex;
+        align-items: center;
+    }
+
+    .quote-ticker-track {
+        display: flex;
+        align-items: center;
+        width: max-content;
+        animation: quote-ticker-scroll 34s linear infinite;
+    }
+
+    .quote-ticker:hover .quote-ticker-track {
+        animation-play-state: paused;
+    }
+
+    .quote-ticker-item {
+        display: grid;
+        grid-template-columns: 22px max-content;
+        grid-template-rows: auto auto;
+        column-gap: .35rem;
+        align-items: center;
+        min-width: 126px;
+        padding: .25rem .65rem;
+        color: #20242d;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    .quote-ticker-item:hover,
+    .quote-ticker-item:focus {
+        background: #eef4fb;
+        color: #20242d;
+    }
+
+    .quote-coin-icon {
+        grid-row: 1 / span 2;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-size: .55rem;
+        font-weight: 900;
+        letter-spacing: 0;
+    }
+
+    .quote-coin-icon.BTC,
+    .quote-coin-icon.BCH {
+        background: #f7931a;
+    }
+
+    .quote-coin-icon.ETH {
+        background: #627eea;
+    }
+
+    .quote-coin-icon.BNB {
+        background: #f3ba2f;
+        color: #1b1d22;
+    }
+
+    .quote-coin-icon.XRP {
+        background: #23292f;
+    }
+
+    .quote-coin-icon.SOL {
+        background: linear-gradient(135deg, #14f195, #9945ff);
+    }
+
+    .quote-coin-icon.XMR {
+        background: #ff6600;
+    }
+
+    .quote-ticker-name {
+        font-size: .74rem;
+        font-weight: 700;
+        line-height: 1.05;
+    }
+
+    .quote-ticker-symbol {
+        color: #6c737f;
+        font-size: .62rem;
+        font-weight: 700;
+        line-height: 1.1;
+    }
+
+    .quote-ticker-price {
+        font-size: .68rem;
+        font-weight: 800;
+        margin-left: .18rem;
+    }
+
+    .quote-ticker-change {
+        font-size: .66rem;
+        font-weight: 900;
+        line-height: 1.1;
+    }
+
+    @keyframes quote-ticker-scroll {
+        from {
+            transform: translateX(0);
+        }
+        to {
+            transform: translateX(-50%);
+        }
+    }
+
+    /* Controles de período e alternância entre gráfico de linha e velas. */
+    .period-tabs {
+        display: flex;
+        align-items: center;
+        gap: clamp(.45rem, 2vw, 1.7rem);
+        flex-wrap: wrap;
+    }
+
+    .period-tab {
+        color: #fff;
+        font-weight: 800;
+        font-size: .9rem;
+        text-decoration: none;
+        padding: .35rem .15rem;
+    }
+
+    .period-tab.active {
+        color: #ff7a1a;
+    }
+
+    .chart-tool {
+        width: 48px;
+        height: 36px;
+        border: 1px solid #303541;
+        border-radius: 8px;
+        background: transparent;
+        color: #fff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .chart-tool.is-active,
+    .chart-tool[aria-pressed="true"] {
+        background: #20242d;
+        border-color: #4b5365;
+        color: #fff;
+    }
+
+    .asset-emblem {
+        width: clamp(54px, 8vw, 72px);
+        aspect-ratio: 1;
+        border-radius: 50%;
+        font-size: clamp(1rem, 2.5vw, 1.35rem);
+        box-shadow: inset 0 0 0 6px rgba(255, 255, 255, .92);
+    }
+
+    .asset-emblem.quote-coin-icon {
+        width: clamp(54px, 8vw, 72px);
+        height: auto;
+        font-size: clamp(1rem, 2.5vw, 1.35rem);
+        flex: 0 0 auto;
+    }
+
+    .market-chart-wrap {
+        min-height: 320px;
+    }
+
+    .market-chart-svg {
+        width: 100%;
+        height: auto;
+        display: block;
+        overflow: visible;
+    }
+
+    .price-pill {
+        fill: #7d8799;
+        pointer-events: none;
+    }
+
+    .price-pill-text {
+        fill: #fff;
+        font-size: 14px;
+        font-weight: 700;
+        pointer-events: none;
+    }
+
+    /* Camada interativa do gráfico de linha: área clicável/focável e tooltip. */
+    .market-hover-point {
+        cursor: crosshair;
+        outline: none;
+    }
+
+    .market-hover-zone {
+        fill: transparent;
+        pointer-events: all;
+    }
+
+    .market-hover-feedback {
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .12s ease;
+    }
+
+    .market-hover-point:hover .market-hover-feedback,
+    .market-hover-point:focus .market-hover-feedback,
+    .market-hover-point:focus-within .market-hover-feedback {
+        opacity: 1;
+    }
+
+    .market-hover-guide {
+        stroke: #586b95;
+        stroke-width: 1;
+        stroke-dasharray: 2 5;
+        opacity: .82;
+    }
+
+    .market-hover-dot {
+        fill: #20d26b;
+        stroke: #111318;
+        stroke-width: 3;
+    }
+
+    .market-hover-pill {
+        fill: #7d8799;
+        filter: drop-shadow(0 8px 14px rgba(0, 0, 0, .28));
+    }
+
+    .market-hover-price {
+        fill: #fff;
+        font-size: 16px;
+        font-weight: 800;
+    }
+
+    .market-hover-date {
+        fill: #dfe5ef;
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    /* Camada interativa do gráfico de velas com tooltip de abertura, máxima, mínima e fechamento. */
+    .market-candle-point {
+        cursor: crosshair;
+        outline: none;
+    }
+
+    .market-candle-zone {
+        fill: transparent;
+        pointer-events: all;
+    }
+
+    .market-candle-feedback {
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .12s ease;
+    }
+
+    .market-candle-point:hover .market-candle-feedback,
+    .market-candle-point:focus .market-candle-feedback,
+    .market-candle-point:focus-within .market-candle-feedback {
+        opacity: 1;
+    }
+
+    .market-candle-pill {
+        fill: #7d8799;
+        filter: drop-shadow(0 8px 14px rgba(0, 0, 0, .28));
+    }
+
+    .market-candle-label {
+        fill: #dfe5ef;
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    .market-candle-value {
+        fill: #fff;
+        font-size: 12px;
+        font-weight: 800;
+    }
+
+    /* O atributo data-chart-mode decide qual camada SVG fica visível. */
+    .market-chart-shell[data-chart-mode="line"] [data-chart-layer="candles"],
+    .market-chart-shell[data-chart-mode="candles"] [data-chart-layer="line"] {
+        display: none;
+    }
+
+    .candle-legend {
+        display: none;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 1rem;
+        color: #8b96ad;
+        font-size: .82rem;
+        font-weight: 700;
+    }
+
+    .market-chart-shell[data-chart-mode="candles"] .candle-legend {
+        display: flex;
+    }
+
+    .candle-legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: .4rem;
+    }
+
+    .candle-legend-swatch {
+        width: 10px;
+        height: 10px;
+        border-radius: 2px;
+        display: inline-block;
+    }
+
+    .candle-legend-swatch.buy {
+        background: #198754;
+    }
+
+    .candle-legend-swatch.sell {
+        background: #dc3545;
+    }
+
+    /* Ajustes para manter cartões, ticker e gráfico confortáveis em telas menores. */
+    @media (max-width: 575.98px) {
+        .market-chart-shell {
+            padding: 1rem .85rem;
+        }
+
+        .market-summary-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .chart-tool {
+            width: 42px;
+            height: 34px;
+        }
+
+        .market-chart-wrap {
+            min-height: 240px;
+        }
+
+        .quote-ticker-item {
+            min-width: 118px;
+            padding-inline: .5rem;
+        }
+    }
+
+    @media (min-width: 576px) and (max-width: 991.98px) {
+        .market-summary-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+</style>
+
+{# Cabeçalho da página: ação de atualização manual e seleção do período analisado. #}
+<div class="d-flex flex-column flex-md-row justify-content-between gap-3 align-items-md-center mb-3">
+    <h1 class="mb-0">Dashboard de Criptomoedas</h1>
+    <div class="d-flex flex-column flex-sm-row align-items-sm-center gap-2">
+        <button type="button" id="refresh-prices" class="btn btn-outline-primary">Atualizar agora</button>
+        <span id="price-refresh-status" class="small text-body-secondary" aria-live="polite"></span>
+        <form method="get" class="d-flex align-items-center gap-2">
+            <label for="period" class="form-label mb-0">Período</label>
+            {% if selected_asset %}
+                <input type="hidden" name="asset" value="{{ selected_asset.coingecko_id }}">
+            {% endif %}
+            <select id="period" name="period" class="form-select" onchange="this.form.submit()">
+                {% for value, option in period_options.items %}
+                    <option value="{{ value }}"{% if value == selected_period %} selected{% endif %}>{{ option.label }}</option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+</div>
+
+{# Ticker horizontal com as moedas monitoradas; clicar em uma moeda troca o gráfico selecionado. #}
+{% if carousel_assets %}
+<section class="quote-ticker mb-4" aria-label="Cotações de criptomoedas">
+    <div class="quote-ticker-track">
+        {% for asset in carousel_assets %}
+            <a class="quote-ticker-item" href="?period={{ selected_period }}&asset={{ asset.coingecko_id }}#charts-section">
+                <span class="quote-coin-icon {{ asset.symbol }}">{{ asset.symbol|slice:":1" }}</span>
+                <span class="quote-ticker-name">
+                    {{ asset.name }}
+                    <span class="quote-ticker-price">
+                        {% if asset.last_price_brl %}R${{ asset.last_price_brl|floatformat:2 }}{% else %}--{% endif %}
+                    </span>
+                </span>
+                <span class="quote-ticker-symbol">{{ asset.symbol }}</span>
+                <span class="quote-ticker-change {% if asset.is_period_positive %}market-change-positive{% else %}market-change-negative{% endif %}">
+                    {% if asset.period_change_percentage is not None %}
+                        {% if asset.is_period_positive %}+{% endif %}{{ asset.period_change_percentage|floatformat:2 }}%
+                    {% else %}
+                        --
+                    {% endif %}
+                </span>
+            </a>
+        {% endfor %}
+        {# Segunda sequência repetida para a animação terminar e recomeçar sem corte visual. #}
+        {% for asset in carousel_assets %}
+            <a class="quote-ticker-item" href="?period={{ selected_period }}&asset={{ asset.coingecko_id }}#charts-section" aria-hidden="true" tabindex="-1">
+                <span class="quote-coin-icon {{ asset.symbol }}">{{ asset.symbol|slice:":1" }}</span>
+                <span class="quote-ticker-name">
+                    {{ asset.name }}
+                    <span class="quote-ticker-price">
+                        {% if asset.last_price_brl %}R${{ asset.last_price_brl|floatformat:2 }}{% else %}--{% endif %}
+                    </span>
+                </span>
+                <span class="quote-ticker-symbol">{{ asset.symbol }}</span>
+                <span class="quote-ticker-change {% if asset.is_period_positive %}market-change-positive{% else %}market-change-negative{% endif %}">
+                    {% if asset.period_change_percentage is not None %}
+                        {% if asset.is_period_positive %}+{% endif %}{{ asset.period_change_percentage|floatformat:2 }}%
+                    {% else %}
+                        --
+                    {% endif %}
+                </span>
+            </a>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+{# Resumo consolidado calculado na view para leitura rápida do mercado. #}
+<section class="market-summary-grid mb-4" aria-label="Resumo do mercado">
+    <article class="market-summary-card">
+        <div class="market-summary-label">Moedas monitoradas</div>
+        <div>
+            <div class="market-summary-value">{{ market_summary.tracked_count }}</div>
+            <div class="market-summary-meta">
+                {{ market_summary.positive_count }} em alta · {{ market_summary.negative_count }} em queda
+            </div>
+        </div>
+    </article>
+    <article class="market-summary-card">
+        <div class="market-summary-label">Média do período</div>
+        <div>
+            <div class="market-summary-value {% if market_summary.is_average_positive %}market-change-positive{% else %}market-change-negative{% endif %}">
+                {% if market_summary.average_change is not None %}
+                    {% if market_summary.is_average_positive %}+{% endif %}{{ market_summary.average_change|floatformat:2 }}%
+                {% else %}
+                    --
+                {% endif %}
+            </div>
+            <div class="market-summary-meta">{{ variation_label }}</div>
+        </div>
+    </article>
+    <article class="market-summary-card">
+        <div class="market-summary-label">Maior alta</div>
+        <div>
+            {% if market_summary.best_asset %}
+                <div class="market-summary-value">{{ market_summary.best_asset.symbol }}</div>
+                <div class="market-summary-meta {% if market_summary.best_asset.is_period_positive %}market-change-positive{% else %}market-change-negative{% endif %}">
+                    {% if market_summary.best_asset.is_period_positive %}+{% endif %}{{ market_summary.best_asset.period_change_percentage|floatformat:2 }}% · {{ market_summary.best_asset.name }}
+                </div>
+            {% else %}
+                <div class="market-summary-value">--</div>
+                <div class="market-summary-meta">Sem histórico suficiente</div>
+            {% endif %}
+        </div>
+    </article>
+    <article class="market-summary-card">
+        <div class="market-summary-label">Última cotação</div>
+        <div>
+            <div class="market-summary-value">
+                {% if market_summary.latest_update %}{{ market_summary.latest_update|date:"H:i" }}{% else %}--{% endif %}
+            </div>
+            <div class="market-summary-meta">
+                {% if market_summary.latest_update %}{{ market_summary.latest_update|date:"d/m/Y" }}{% else %}Aguardando atualização{% endif %}
+            </div>
+        </div>
+    </article>
+</section>
+
+{# Ranking ordenado pela variação do período escolhido. #}
+<h2 class="mt-5">Ranking de valorização</h2>
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Posição</th>
+            <th>Moeda</th>
+            <th>Preço BRL</th>
+            <th>{{ variation_label }}</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for asset in rankings %}
+        <tr>
+            <td>{{ forloop.counter }}</td>
+            <td>{{ asset.name }}</td>
+            <td>R$ {{ asset.last_price_brl|floatformat:2 }}</td>
+            <td>{{ asset.period_change_percentage|floatformat:2 }}%</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{# Gráfico detalhado da moeda selecionada; os pontos e velas são pré-calculados em views.py. #}
+<h2 id="charts-section" class="mt-5">Gráfico de preço</h2>
+{% if selected_chart %}
+<div class="market-chart-shell" data-chart-mode="line">
+    {# Cabeçalho do gráfico com preço atual e variação acumulada no período. #}
+    <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+        <div>
+            <div class="market-breadcrumb mb-3">
+                <span>Home</span><span>Crypto</span><span>{{ selected_chart.name }}</span>
+            </div>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <h3 class="mb-0 fw-bold">{{ selected_chart.name }} <span class="market-symbol">({{ selected_chart.symbol }})</span></h3>
+                <span class="verified-badge">Verified</span>
+                <span class="verified-badge">✓</span>
+            </div>
+            <div class="d-flex align-items-baseline gap-2 flex-wrap mt-1">
+                <span class="fs-3 fw-bold">R$ {{ selected_chart.current_price|floatformat:2 }}</span>
+                <span class="fw-bold {% if selected_chart.is_positive %}market-change-positive{% else %}market-change-negative{% endif %}">
+                    {% if selected_chart.is_positive %}+{% endif %}R$ {{ selected_chart.absolute_change|floatformat:2 }}
+                    ({% if selected_chart.period_change_percentage >= 0 %}+{% endif %}{{ selected_chart.period_change_percentage|floatformat:2 }}%)
+                </span>
+            </div>
+        </div>
+        <div class="asset-emblem quote-coin-icon {{ selected_chart.symbol }}" aria-hidden="true">{{ selected_chart.symbol|slice:":1" }}</div>
+    </div>
+
+    {# Abas de período e botões para alternar entre linha e velas sem recarregar a página. #}
+    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+        <div class="period-tabs" aria-label="Períodos do gráfico">
+            {% for value, option in period_options.items %}
+                <a class="period-tab{% if value == selected_period %} active{% endif %}" href="?period={{ value }}&asset={{ selected_asset.coingecko_id }}#charts-section">{{ option.short_label }}</a>
+            {% endfor %}
+        </div>
+        <div class="d-flex gap-2">
+            <button class="chart-tool" type="button" aria-label="Gráfico de velas" title="Velas" data-chart-toggle="candles" aria-pressed="false">
+                <svg width="25" height="20" viewBox="0 0 25 20" aria-hidden="true">
+                    <line x1="5" y1="2" x2="5" y2="18" stroke="currentColor" stroke-width="1.6"/>
+                    <rect x="2" y="7" width="6" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/>
+                    <line x1="13" y1="4" x2="13" y2="17" stroke="currentColor" stroke-width="1.6"/>
+                    <rect x="10" y="5" width="6" height="9" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/>
+                    <line x1="21" y1="1" x2="21" y2="16" stroke="currentColor" stroke-width="1.6"/>
+                    <rect x="18" y="3" width="6" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/>
+                </svg>
+            </button>
+            <button class="chart-tool is-active" type="button" aria-label="Gráfico de linha" title="Linha" data-chart-toggle="line" aria-pressed="true">
+                <svg width="26" height="20" viewBox="0 0 26 20" aria-hidden="true">
+                    <polyline points="2,15 8,9 13,12 21,4 24,6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <div class="market-chart-wrap">
+        <svg viewBox="0 0 760 360" role="img" aria-label="Gráfico de preço de {{ selected_chart.name }}" class="market-chart-svg">
+            <defs>
+                {# Preenchimento suave abaixo da linha, verde em alta e vermelho em queda. #}
+                <linearGradient id="market-area-fill" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stop-color="{% if selected_chart.is_positive %}#1f8f5e{% else %}#ff3b55{% endif %}" stop-opacity=".18"/>
+                    <stop offset="100%" stop-color="{% if selected_chart.is_positive %}#1f8f5e{% else %}#ff3b55{% endif %}" stop-opacity="0"/>
+                </linearGradient>
+            </defs>
+            {# Grade vertical de referência do gráfico. #}
+            <g stroke="#32415d" stroke-width="1" stroke-dasharray="1 4" opacity=".95">
+                <line x1="34" y1="30" x2="34" y2="330"/>
+                <line x1="129" y1="30" x2="129" y2="330"/>
+                <line x1="224" y1="30" x2="224" y2="330"/>
+                <line x1="319" y1="30" x2="319" y2="330"/>
+                <line x1="414" y1="30" x2="414" y2="330"/>
+                <line x1="509" y1="30" x2="509" y2="330"/>
+                <line x1="604" y1="30" x2="604" y2="330"/>
+                <line x1="699" y1="30" x2="699" y2="330"/>
+            </g>
+            {# Camada de linha: curva de preço, área preenchida, barras de movimento e tooltips por ponto. #}
+            <g class="market-chart-layer" data-chart-layer="line">
+                <polygon points="{{ selected_chart.area_points }}" fill="url(#market-area-fill)"></polygon>
+                <g fill="#21304c" opacity=".86">
+                    {# Barras azuis representam intensidade da variação de preço, não volume real negociado. #}
+                    {% for bar in selected_chart.volume_bars %}
+                        <rect x="{{ bar.x }}" y="{{ bar.y }}" width="{{ bar.width }}" height="{{ bar.height }}" rx="1"></rect>
+                    {% endfor %}
+                </g>
+                <polyline points="{{ selected_chart.line_points }}" fill="none" stroke="{% if selected_chart.is_positive %}#2de083{% else %}#ff3b55{% endif %}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></polyline>
+                {% for point in selected_chart.hover_points %}
+                    <g class="market-hover-point" tabindex="0" aria-label="Cotação {{ point.compact_label }} R$ {{ point.price|floatformat:2 }}">
+                        <circle class="market-hover-zone" cx="{{ point.x }}" cy="{{ point.y }}" r="15"></circle>
+                        <g class="market-hover-feedback">
+                            <line class="market-hover-guide" x1="{{ point.x }}" y1="30" x2="{{ point.x }}" y2="330"></line>
+                            <circle class="market-hover-dot" cx="{{ point.x }}" cy="{{ point.y }}" r="5"></circle>
+                            <rect class="market-hover-pill" x="{{ point.tooltip_x }}" y="{{ point.tooltip_y }}" width="118" height="52" rx="6"></rect>
+                            <text class="market-hover-price" x="{{ point.text_x }}" y="{{ point.price_text_y }}" text-anchor="middle">R$ {{ point.price|floatformat:2 }}</text>
+                            <text class="market-hover-date" x="{{ point.text_x }}" y="{{ point.date_text_y }}" text-anchor="middle">{{ point.compact_label }}</text>
+                        </g>
+                    </g>
+                {% endfor %}
+            </g>
+            {# Camada de velas: mostra abertura, fechamento, máxima e mínima entre cada ponto de preço. #}
+            <g class="market-chart-layer" data-chart-layer="candles">
+                {% for candle in selected_chart.market_candles %}
+                    <g class="market-candle-point" tabindex="0" aria-label="Vela de {{ candle.label }}: abertura R$ {{ candle.open|floatformat:2 }}, máxima R$ {{ candle.high|floatformat:2 }}, mínima R$ {{ candle.low|floatformat:2 }}, fechamento R$ {{ candle.close|floatformat:2 }}">
+                        <line x1="{{ candle.x }}" y1="{{ candle.wick_top_y }}" x2="{{ candle.x }}" y2="{{ candle.wick_bottom_y }}" stroke="{{ candle.color }}" stroke-width="2.2"></line>
+                        <rect x="{{ candle.body_x }}" y="{{ candle.body_y }}" width="{{ candle.body_width }}" height="{{ candle.body_height }}" rx="2" fill="{{ candle.color }}"></rect>
+                        <rect class="market-candle-zone" x="{{ candle.hover_x }}" y="{{ candle.hover_y }}" width="{{ candle.hover_width }}" height="{{ candle.hover_height }}"></rect>
+                        <g class="market-candle-feedback">
+                            <line class="market-hover-guide" x1="{{ candle.x }}" y1="30" x2="{{ candle.x }}" y2="330"></line>
+                            <circle class="market-hover-dot" cx="{{ candle.x }}" cy="{{ candle.wick_top_y }}" r="4"></circle>
+                            <circle class="market-hover-dot" cx="{{ candle.x }}" cy="{{ candle.wick_bottom_y }}" r="4"></circle>
+                            <rect class="market-candle-pill" x="{{ candle.tooltip_x }}" y="{{ candle.tooltip_y }}" width="142" height="106" rx="6"></rect>
+                            <text class="market-candle-label" x="{{ candle.tooltip_label_x }}" y="{{ candle.tooltip_row_1_y }}">Máx</text>
+                            <text class="market-candle-value" x="{{ candle.tooltip_value_x }}" y="{{ candle.tooltip_row_1_y }}" text-anchor="end">R$ {{ candle.high|floatformat:2 }}</text>
+                            <text class="market-candle-label" x="{{ candle.tooltip_label_x }}" y="{{ candle.tooltip_row_2_y }}">Fecha</text>
+                            <text class="market-candle-value" x="{{ candle.tooltip_value_x }}" y="{{ candle.tooltip_row_2_y }}" text-anchor="end">R$ {{ candle.close|floatformat:2 }}</text>
+                            <text class="market-candle-label" x="{{ candle.tooltip_label_x }}" y="{{ candle.tooltip_row_3_y }}">Abre</text>
+                            <text class="market-candle-value" x="{{ candle.tooltip_value_x }}" y="{{ candle.tooltip_row_3_y }}" text-anchor="end">R$ {{ candle.open|floatformat:2 }}</text>
+                            <text class="market-candle-label" x="{{ candle.tooltip_label_x }}" y="{{ candle.tooltip_row_4_y }}">Mín</text>
+                            <text class="market-candle-value" x="{{ candle.tooltip_value_x }}" y="{{ candle.tooltip_row_4_y }}" text-anchor="end">R$ {{ candle.low|floatformat:2 }}</text>
+                            <text class="market-candle-label" x="{{ candle.tooltip_label_x }}" y="{{ candle.tooltip_row_5_y }}">Data</text>
+                            <text class="market-candle-value" x="{{ candle.tooltip_value_x }}" y="{{ candle.tooltip_row_5_y }}" text-anchor="end">{{ candle.compact_label }}</text>
+                        </g>
+                    </g>
+                {% endfor %}
+            </g>
+            {# Marcadores auxiliares de preço máximo e mínimo do período renderizado. #}
+            {% if selected_chart.first_point %}
+                <circle cx="{{ selected_chart.first_point.x }}" cy="{{ selected_chart.first_point.y }}" r="4" fill="#20d26b" stroke="#111318" stroke-width="2"></circle>
+                <rect class="price-pill" x="58" y="34" width="74" height="25" rx="5"></rect>
+                <text class="price-pill-text" x="95" y="51" text-anchor="middle">R$ {{ selected_chart.max_price|floatformat:0 }}</text>
+            {% endif %}
+            {% if selected_chart.last_point %}
+                <rect class="price-pill" x="580" y="276" width="74" height="25" rx="5"></rect>
+                <text class="price-pill-text" x="617" y="293" text-anchor="middle">R$ {{ selected_chart.min_price|floatformat:0 }}</text>
+            {% endif %}
+        </svg>
+    </div>
+
+    {# Rodapé do gráfico com intervalo de datas e extremos de preço. #}
+    <div class="d-flex justify-content-between small mt-2" style="color:#7d8799;">
+        <span>{{ selected_chart.start_label }}</span>
+        <span>Menor: R$ {{ selected_chart.min_price|floatformat:2 }}</span>
+        <span>Maior: R$ {{ selected_chart.max_price|floatformat:2 }}</span>
+        <span>{{ selected_chart.end_label }}</span>
+    </div>
+    <div class="candle-legend mt-2" aria-label="Legenda do gráfico de velas">
+        <span class="candle-legend-item"><span class="candle-legend-swatch buy"></span>Verde: compra / alta</span>
+        <span class="candle-legend-item"><span class="candle-legend-swatch sell"></span>Vermelho: venda / queda</span>
+    </div>
+</div>
+{% endif %}
+
+{# Dados completos para uso futuro em scripts; hoje o SVG principal já vem pronto da view. #}
+<script id="chart-data-json" type="application/json">{{ chart_data_json|safe }}</script>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // Alterna a visualização do gráfico sem buscar novos dados no servidor.
+    (function(){
+        const toggleButtons = document.querySelectorAll('[data-chart-toggle]');
+
+        function setChartMode(shell, mode){
+            if(!shell) return;
+            shell.dataset.chartMode = mode;
+            shell.querySelectorAll('[data-chart-toggle]').forEach((button) => {
+                const isActive = button.dataset.chartToggle === mode;
+                button.classList.toggle('is-active', isActive);
+                button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+            });
+        }
+
+        toggleButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                setChartMode(button.closest('.market-chart-shell'), button.dataset.chartToggle);
+            });
+        });
+    })();
+
+    // Atualiza preços pela API: manualmente pelo botão e automaticamente a cada 10 minutos.
+    (function(){
+        const refreshButton = document.getElementById('refresh-prices');
+        const status = document.getElementById('price-refresh-status');
+        const intervalMs = 10 * 60 * 1000;
+
+        function setStatus(message){
+            if(status) status.textContent = message;
+        }
+
+        function refreshPrices(force){
+            const url = force ? '{% url "cripto_monitor:prices_api" %}?refresh=1' : '{% url "cripto_monitor:prices_api" %}';
+            if(refreshButton) refreshButton.disabled = true;
+            setStatus(force ? 'Atualizando...' : '');
+            return fetch(url, { headers: { 'Accept': 'application/json' } })
+                .then((response) => response.json().then((data) => ({ ok: response.ok, data })))
+                .then(({ ok, data }) => {
+                    if(!ok){
+                        setStatus('Não foi possível atualizar agora.');
+                        return;
+                    }
+                    // Quando a API grava preços novos, recarregamos para reconstruir ranking e gráfico.
+                    if(data.refreshed){
+                        setStatus('Preços atualizados.');
+                        window.location.reload();
+                    } else if(force) {
+                        setStatus('Preços já estão recentes.');
+                    }
+                })
+                .catch(() => setStatus('Falha ao consultar preços.'))
+                .finally(() => {
+                    if(refreshButton) refreshButton.disabled = false;
+                });
+        }
+
+        if(refreshButton){
+            refreshButton.addEventListener('click', () => refreshPrices(true));
+        }
+        refreshPrices(false);
+        window.setInterval(() => refreshPrices(false), intervalMs);
+    })();
+</script>
+{% endblock %}

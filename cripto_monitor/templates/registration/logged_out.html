@@ -1,0 +1,6 @@
+{% extends 'cripto_monitor/base.html' %}
+
+{% block content %}
+<div class="alert alert-info">Você saiu da sessão.</div>
+<a class="btn btn-primary" href="{% url 'login' %}">Entrar novamente</a>
+{% endblock %}

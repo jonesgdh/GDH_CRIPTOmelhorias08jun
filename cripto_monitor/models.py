@@ -109,6 +109,55 @@ class SimulatedTrade(models.Model):
         return f'{self.get_trade_type_display()} {self.crypto_amount} {self.simulation.asset.symbol}'
 
 
+class SimulationAlert(models.Model):
+    # Alerta baseado no resultado percentual de uma simulação de investimento.
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name='simulation_alerts',
+    )
+    ALERT_TYPE_CHOICES = [
+        ('above', 'Ganho acima de'),
+        ('below', 'Resultado abaixo de'),
+    ]
+
+    simulation = models.ForeignKey(Simulation, on_delete=models.CASCADE, related_name='alerts')
+    alert_type = models.CharField(max_length=8, choices=ALERT_TYPE_CHOICES)
+    # threshold_percentage é o limite percentual. Ex.: 10 para ganho acima de 10%, -5 para queda abaixo de -5%.
+    threshold_percentage = models.DecimalField(max_digits=8, decimal_places=2)
+    active = models.BooleanField(default=True)
+    triggered = models.BooleanField(default=False)
+    triggered_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.simulation.asset.symbol} {self.get_alert_type_display()} {self.threshold_percentage:.2f}%'
+
+    def check_trigger(self):
+        # Não reavalia alertas encerrados ou já disparados.
+        if not self.active or self.triggered:
+            return False
+
+        current = self.simulation.gain_loss_percentage
+        if self.alert_type == 'above' and current >= self.threshold_percentage:
+            self.mark_triggered()
+            return True
+        if self.alert_type == 'below' and current <= self.threshold_percentage:
+            self.mark_triggered()
+            return True
+        return False
+
+    def mark_triggered(self):
+        self.triggered = True
+        self.triggered_at = timezone.now()
+        self.save(update_fields=['triggered', 'triggered_at'])
+
+
 class PriceAlert(models.Model):
     # Alertas podem ser pessoais; null/blank preserva compatibilidade com alertas antigos sem usuário.
     user = models.ForeignKey(

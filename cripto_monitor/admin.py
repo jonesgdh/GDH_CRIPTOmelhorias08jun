@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import CryptoAsset, PriceAlert, PriceHistory, SimulatedTrade, Simulation
+from .models import CryptoAsset, PriceAlert, PriceHistory, SimulatedTrade, Simulation, SimulationAlert
 
 
 @admin.register(CryptoAsset)
@@ -36,3 +36,10 @@ class PriceAlertAdmin(admin.ModelAdmin):
     list_display = ('asset', 'alert_type', 'threshold_brl', 'active', 'triggered', 'triggered_at', 'created_at')
     list_filter = ('active', 'triggered', 'alert_type', 'asset')
     search_fields = ('asset__name', 'asset__symbol')
+
+
+@admin.register(SimulationAlert)
+class SimulationAlertAdmin(admin.ModelAdmin):
+    list_display = ('simulation', 'alert_type', 'threshold_percentage', 'active', 'triggered', 'triggered_at', 'created_at')
+    list_filter = ('active', 'triggered', 'alert_type')
+    search_fields = ('simulation__asset__name', 'simulation__asset__symbol')

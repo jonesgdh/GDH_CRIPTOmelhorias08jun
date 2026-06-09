@@ -1,0 +1,233 @@
+{% extends 'cripto_monitor/base.html' %}
+
+{% block content %}
+<style>
+    .comparison-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .comparison-chart-card {
+        border: 1px solid var(--bs-border-color);
+        border-radius: 8px;
+        padding: clamp(1rem, 2vw, 1.5rem);
+    }
+
+    .comparison-chart-wrap {
+        height: clamp(340px, 52vh, 560px);
+        min-height: 0;
+        position: relative;
+    }
+
+    .comparison-meta {
+        color: var(--bs-secondary-color);
+        font-size: .9rem;
+        font-weight: 600;
+        margin-top: .65rem;
+    }
+
+    .comparison-ranking {
+        display: grid;
+        gap: .65rem;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        margin-top: 1rem;
+    }
+
+    .comparison-asset {
+        border: 1px solid var(--bs-border-color);
+        border-radius: 8px;
+        padding: .75rem;
+        min-width: 0;
+    }
+
+    .comparison-asset-top {
+        display: flex;
+        align-items: center;
+        gap: .45rem;
+        min-width: 0;
+    }
+
+    .comparison-swatch {
+        width: .72rem;
+        height: .72rem;
+        border-radius: 999px;
+        flex: 0 0 auto;
+    }
+
+    .comparison-symbol {
+        font-weight: 900;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .comparison-name {
+        color: var(--bs-secondary-color);
+        font-size: .78rem;
+        font-weight: 700;
+        margin-top: .15rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .comparison-change {
+        display: block;
+        font-size: 1.08rem;
+        font-weight: 900;
+        margin-top: .45rem;
+    }
+
+    @media (max-width: 1199.98px) {
+        .comparison-ranking {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 767.98px) {
+        .comparison-header {
+            align-items: stretch;
+            flex-direction: column;
+        }
+
+        .comparison-header form {
+            width: 100%;
+        }
+
+        .comparison-header .form-select {
+            width: 100%;
+        }
+
+        .comparison-chart-wrap {
+            height: 360px;
+        }
+
+        .comparison-ranking {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 420px) {
+        .comparison-chart-card {
+            padding: .85rem;
+        }
+
+        .comparison-ranking {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<div class="comparison-header">
+    <div>
+        <h1 class="mb-1">Comparação</h1>
+        <div class="text-body-secondary fw-semibold">Evolução percentual das 10 moedas no período selecionado.</div>
+    </div>
+    <form method="get" class="d-flex align-items-center gap-2">
+        <label for="period" class="form-label mb-0">Período</label>
+        <select id="period" name="period" class="form-select" onchange="this.form.submit()">
+            {% for value, option in period_options.items %}
+                <option value="{{ value }}"{% if value == selected_period %} selected{% endif %}>{{ option.label }}</option>
+            {% endfor %}
+        </select>
+    </form>
+</div>
+
+<section class="comparison-chart-card">
+    <div class="comparison-chart-wrap">
+        <canvas id="comparison-chart" aria-label="Gráfico comparativo das moedas monitoradas"></canvas>
+    </div>
+    <div class="comparison-meta">
+        Base 0% no primeiro preço encontrado em {{ variation_label|lower }}.
+    </div>
+
+    {% if comparison_data.rows %}
+        <div class="comparison-ranking" aria-label="Resultado por moeda">
+            {% for row in comparison_data.rows %}
+                <article class="comparison-asset">
+                    <div class="comparison-asset-top">
+                        <span class="comparison-swatch" style="background: {{ row.color }}"></span>
+                        <span class="comparison-symbol">{{ row.asset.symbol }}</span>
+                    </div>
+                    <div class="comparison-name">{{ row.asset.name }}</div>
+                    <span class="comparison-change {% if row.is_positive %}text-success{% else %}text-danger{% endif %}">
+                        {% if row.is_positive %}+{% endif %}{{ row.final_change|floatformat:2 }}%
+                    </span>
+                </article>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="mb-0 mt-3 text-body-secondary">Ainda não há histórico suficiente para montar a comparação.</p>
+    {% endif %}
+</section>
+
+<script id="comparison-chart-data" type="application/json">{{ comparison_data_json|safe }}</script>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    (function(){
+        const canvas = document.getElementById('comparison-chart');
+        const dataElement = document.getElementById('comparison-chart-data');
+        if(!canvas || !dataElement || !window.Chart) return;
+
+        const chartData = JSON.parse(dataElement.textContent);
+        new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: chartData.labels,
+                datasets: chartData.datasets,
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            boxWidth: 12,
+                            boxHeight: 12,
+                            usePointStyle: true,
+                        },
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context){
+                                const value = Number(context.parsed.y || 0);
+                                const sign = value >= 0 ? '+' : '';
+                                return context.dataset.label + ': ' + sign + value.toFixed(2) + '%';
+                            },
+                        },
+                    },
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            maxRotation: 0,
+                            autoSkip: true,
+                            maxTicksLimit: 6,
+                        },
+                        grid: {
+                            display: false,
+                        },
+                    },
+                    y: {
+                        ticks: {
+                            callback: function(value){
+                                return value + '%';
+                            },
+                        },
+                    },
+                },
+            },
+        });
+    })();
+</script>
+{% endblock %}

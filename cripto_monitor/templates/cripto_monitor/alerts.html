@@ -1,16 +1,52 @@
 {% extends 'cripto_monitor/base.html' %}
 
 {% block content %}
-<h1>Alertas de Preço</h1>
+<h1>Alertas</h1>
 <div class="row">
     {# Formulário para cadastrar um alerta novo vinculado ao usuário logado. #}
     <div class="col-lg-5">
         <div class="card shadow-sm mb-4">
             <div class="card-body">
-                <h5 class="card-title">Novo alerta</h5>
+                <h5 class="card-title">Novo alerta de preço</h5>
                 <form method="post" novalidate>
                     {% csrf_token %}
-                    {{ form.as_p }}
+                    <input type="hidden" name="form_type" value="price">
+                    {{ form.non_field_errors }}
+                    <div class="mb-3">
+                        {{ form.asset.label_tag }}
+                        {{ form.asset }}
+                        {{ form.asset.errors }}
+                    </div>
+                    <div class="mb-3">
+                        {{ form.alert_type.label_tag }}
+                        {{ form.alert_type }}
+                        {{ form.alert_type.errors }}
+                    </div>
+                    <div class="mb-2">
+                        <span class="small text-body-secondary">Preço atual</span>
+                        <div id="price-alert-current" class="fw-bold">Selecione uma moeda</div>
+                    </div>
+                    <div class="mb-3">
+                        {{ form.threshold_brl.label_tag }}
+                        <div class="input-group">
+                            <button class="btn btn-outline-secondary" type="button" data-price-adjust="-1" aria-label="Diminuir limite">−1%</button>
+                            {{ form.threshold_brl }}
+                            <button class="btn btn-outline-secondary" type="button" data-price-adjust="1" aria-label="Aumentar limite">+1%</button>
+                            <button class="btn btn-outline-primary" type="button" data-price-use-current>Usar atual</button>
+                        </div>
+                        {{ form.threshold_brl.errors }}
+                    </div>
+                    <button type="submit" class="btn btn-primary">Salvar alerta</button>
+                </form>
+            </div>
+        </div>
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Novo alerta de simulação</h5>
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="simulation">
+                    {{ simulation_form.as_p }}
                     <button type="submit" class="btn btn-primary">Salvar alerta</button>
                 </form>
             </div>
@@ -52,12 +88,17 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    {# A marcação manual ajuda quando o usuário quer registrar o alerta como concluído. #}
-                                    {% if not alert.triggered and alert.active %}
-                                        <a href="{% url 'cripto_monitor:trigger_alert' alert.pk %}" class="btn btn-sm btn-outline-primary">Marcar disparado</a>
-                                    {% else %}
-                                        -
-                                    {% endif %}
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        {# A marcação manual ajuda quando o usuário quer registrar o alerta como concluído. #}
+                                        {% if not alert.triggered and alert.active %}
+                                            <a href="{% url 'cripto_monitor:trigger_alert' alert.pk %}" class="btn btn-sm btn-outline-primary">Marcar disparado</a>
+                                        {% endif %}
+                                        {# Remoção usa POST com CSRF para evitar exclusão por link acidental. #}
+                                        <form method="post" action="{% url 'cripto_monitor:delete_alert' alert.pk %}" onsubmit="return confirm('Excluir este alerta?');">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">Excluir</button>
+                                        </form>
+                                    </div>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -69,6 +110,116 @@
                 {% endif %}
             </div>
         </div>
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Alertas de simulação</h5>
+                {% if simulation_alerts %}
+                <div class="table-responsive">
+                    <table class="table align-middle">
+                        <thead>
+                            <tr>
+                                <th>Simulação</th>
+                                <th>Tipo</th>
+                                <th>Limite</th>
+                                <th>Resultado atual</th>
+                                <th>Status</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for alert in simulation_alerts %}
+                            <tr>
+                                <td>{{ alert.simulation.asset.symbol }}</td>
+                                <td>{{ alert.get_alert_type_display }}</td>
+                                <td>{{ alert.threshold_percentage|floatformat:2 }}%</td>
+                                <td class="{% if alert.simulation.gain_loss_brl >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                    {{ alert.simulation.gain_loss_percentage|floatformat:2 }}%
+                                </td>
+                                <td>
+                                    {% if alert.triggered %}
+                                        <span class="badge bg-success">Disparado</span>
+                                    {% elif not alert.active %}
+                                        <span class="badge bg-secondary">Inativo</span>
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark">Ativo</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <form method="post" action="{% url 'cripto_monitor:delete_simulation_alert' alert.pk %}" onsubmit="return confirm('Excluir este alerta de simulação?');">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">Excluir</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                    <p>Nenhum alerta de simulação registrado.</p>
+                {% endif %}
+            </div>
+        </div>
     </div>
 </div>
+<script id="price-alert-assets-json" type="application/json">{{ price_alert_assets_json|safe }}</script>
+<script>
+    // Auxilia o cadastro de alerta de preço usando a cotação atual da moeda selecionada.
+    (function(){
+        const assetSelect = document.getElementById('id_price-asset');
+        const thresholdInput = document.getElementById('id_price-threshold_brl');
+        const currentPrice = document.getElementById('price-alert-current');
+        const assetsDataElement = document.getElementById('price-alert-assets-json');
+        if(!assetSelect || !thresholdInput || !currentPrice || !assetsDataElement) return;
+
+        let assets = {};
+        try {
+            assets = JSON.parse(assetsDataElement.textContent || '{}');
+        } catch(e) {
+            assets = {};
+        }
+
+        function formatBrl(value){
+            return new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL',
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }).format(value);
+        }
+
+        function selectedPrice(){
+            const asset = assets[assetSelect.value];
+            return asset && asset.price_brl !== null ? Number(asset.price_brl) : null;
+        }
+
+        function updateCurrentPrice(){
+            const price = selectedPrice();
+            currentPrice.textContent = price === null ? 'Sem cotação disponível' : formatBrl(price);
+        }
+
+        function setThreshold(value){
+            thresholdInput.value = Math.max(value, 0).toFixed(2);
+        }
+
+        assetSelect.addEventListener('change', updateCurrentPrice);
+        document.querySelectorAll('[data-price-adjust]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const price = selectedPrice();
+                if(price === null) return;
+                const currentValue = Number(thresholdInput.value || price);
+                const direction = Number(button.dataset.priceAdjust);
+                const step = Math.max(price * 0.01, 0.01);
+                setThreshold(currentValue + direction * step);
+            });
+        });
+        document.querySelectorAll('[data-price-use-current]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const price = selectedPrice();
+                if(price !== null) setThreshold(price);
+            });
+        });
+        updateCurrentPrice();
+    })();
+</script>
 {% endblock %}

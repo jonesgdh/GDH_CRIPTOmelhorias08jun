@@ -171,6 +171,13 @@
             border-bottom: 1px solid #2a2f38;
         }
 
+        .app-mobile-actions {
+            display: flex;
+            align-items: center;
+            gap: .45rem;
+            flex: 0 0 auto;
+        }
+
         /* Abaixo de 992px a sidebar fixa é substituída por um menu recolhível. */
         @media (max-width: 991.98px) {
             .app-sidebar {
@@ -189,6 +196,21 @@
                 display: block;
             }
 
+            .app-mobile-topbar .app-brand {
+                min-width: 0;
+            }
+
+            .app-mobile-topbar .app-logo {
+                width: 48px;
+                height: 48px;
+                border-radius: 10px;
+            }
+
+            .app-mobile-topbar .app-brand-title,
+            .app-mobile-topbar .app-brand-subtitle {
+                white-space: nowrap;
+            }
+
             .app-content {
                 margin-left: 0;
             }
@@ -196,6 +218,20 @@
             .app-mobile-menu {
                 background: #111318;
                 border-bottom: 1px solid #2a2f38;
+            }
+        }
+
+        @media (max-width: 420px) {
+            .app-mobile-topbar .app-brand-title {
+                font-size: .98rem;
+            }
+
+            .app-mobile-topbar .app-brand-subtitle {
+                font-size: .64rem;
+            }
+
+            .app-mobile-actions .btn {
+                padding-inline: .5rem;
             }
         }
 
@@ -221,8 +257,12 @@
         </a>
         <nav class="app-nav">
             <a class="app-nav-link" href="{% url 'cripto_monitor:dashboard' %}"><span class="app-nav-icon">D</span>Dashboard</a>
+            <a class="app-nav-link" href="{% url 'cripto_monitor:comparison' %}"><span class="app-nav-icon">C</span>Comparação</a>
             <a class="app-nav-link" href="{% url 'cripto_monitor:simulations' %}"><span class="app-nav-icon">S</span>Simulações</a>
             <a class="app-nav-link" href="{% url 'cripto_monitor:alerts' %}"><span class="app-nav-icon">A</span>Alertas</a>
+            {% if user.is_staff %}
+                <a class="app-nav-link" href="{% url 'admin:index' %}"><span class="app-nav-icon">G</span>Admin Django</a>
+            {% endif %}
             <a class="app-nav-link" href="https://www.cryptocompare.com/coins/list/all/USD/1" target="_blank" rel="noopener noreferrer nofollow"><span class="app-nav-icon">R</span>Ranking CryptoCompare</a>
             <div class="app-nav-attribution">
                 Fonte externa: <a href="https://www.cryptocompare.com/" target="_blank" rel="noopener noreferrer nofollow">CryptoCompare</a>, powered by CoinDesk Data. © Crypto Coin Comparison Ltd.
@@ -249,15 +289,22 @@
                     <span class="app-brand-subtitle">Monitor</span>
                 </span>
             </a>
-            <button class="btn btn-outline-light btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#mobileSidebarMenu" aria-controls="mobileSidebarMenu" aria-expanded="false" aria-label="Abrir menu">
-                Menu
-            </button>
+            <div class="app-mobile-actions">
+                <button id="theme-toggle-mobile-top" class="btn btn-outline-light btn-sm" type="button" aria-label="Alternar tema">Tema</button>
+                <button class="btn btn-outline-light btn-sm" type="button" data-mobile-menu-toggle data-bs-toggle="collapse" data-bs-target="#mobileSidebarMenu" aria-controls="mobileSidebarMenu" aria-expanded="false" aria-label="Abrir menu">
+                    Menu
+                </button>
+            </div>
         </div>
         <div class="collapse app-mobile-menu" id="mobileSidebarMenu">
             <nav class="app-nav">
                 <a class="app-nav-link" href="{% url 'cripto_monitor:dashboard' %}"><span class="app-nav-icon">D</span>Dashboard</a>
+                <a class="app-nav-link" href="{% url 'cripto_monitor:comparison' %}"><span class="app-nav-icon">C</span>Comparação</a>
                 <a class="app-nav-link" href="{% url 'cripto_monitor:simulations' %}"><span class="app-nav-icon">S</span>Simulações</a>
                 <a class="app-nav-link" href="{% url 'cripto_monitor:alerts' %}"><span class="app-nav-icon">A</span>Alertas</a>
+                {% if user.is_staff %}
+                    <a class="app-nav-link" href="{% url 'admin:index' %}"><span class="app-nav-icon">G</span>Admin Django</a>
+                {% endif %}
                 <a class="app-nav-link" href="https://www.cryptocompare.com/coins/list/all/USD/1" target="_blank" rel="noopener noreferrer nofollow"><span class="app-nav-icon">R</span>Ranking CryptoCompare</a>
                 <div class="app-nav-attribution">
                     Fonte externa: <a href="https://www.cryptocompare.com/" target="_blank" rel="noopener noreferrer nofollow">CryptoCompare</a>, powered by CoinDesk Data. © Crypto Coin Comparison Ltd.
@@ -291,7 +338,7 @@
 <script>
     // Alterna entre tema claro e escuro usando o atributo data-bs-theme do Bootstrap.
     (function(){
-        const toggles = document.querySelectorAll('#theme-toggle, #theme-toggle-mobile');
+        const toggles = document.querySelectorAll('#theme-toggle, #theme-toggle-mobile, #theme-toggle-mobile-top');
         const root = document.documentElement;
         function setTheme(theme){
             root.setAttribute('data-bs-theme', theme);
@@ -307,6 +354,21 @@
             toggle.addEventListener('click', () => {
                 const current = root.getAttribute('data-bs-theme') === 'dark' ? 'dark' : 'light';
                 setTheme(current === 'dark' ? 'light' : 'dark');
+            });
+        });
+    })();
+
+    // Fallback simples para o menu mobile caso o Collapse do Bootstrap não esteja disponível.
+    (function(){
+        const menu = document.getElementById('mobileSidebarMenu');
+        const buttons = document.querySelectorAll('[data-mobile-menu-toggle]');
+        if(!menu || !buttons.length) return;
+
+        buttons.forEach((button) => {
+            button.addEventListener('click', () => {
+                if(window.bootstrap && window.bootstrap.Collapse) return;
+                const isOpen = menu.classList.toggle('show');
+                button.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
             });
         });
     })();

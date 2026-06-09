@@ -2,11 +2,30 @@ from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
-from .models import CryptoAsset, PriceHistory
-from .services import SUPPORTED_ASSETS
+from .models import CryptoAsset, PriceAlert, PriceHistory, Simulation, SimulationAlert
+from .services import SUPPORTED_ASSETS, ensure_supported_assets
+
+
+class SupportedAssetsTests(TestCase):
+    # Testes da lista oficial de moedas monitoradas pelo dashboard.
+    def test_supported_assets_keeps_exactly_ten_active_assets(self):
+        CryptoAsset.objects.create(
+            name='Monero',
+            symbol='XMR',
+            coingecko_id='monero',
+            active=True,
+        )
+
+        ensure_supported_assets()
+
+        self.assertEqual(len(SUPPORTED_ASSETS), 10)
+        self.assertEqual(CryptoAsset.objects.filter(active=True).count(), 10)
+        self.assertFalse(CryptoAsset.objects.get(coingecko_id='monero').active)
+        self.assertTrue(CryptoAsset.objects.get(coingecko_id='bitcoin').active)
 
 
 class DashboardPeriodTests(TestCase):
@@ -145,6 +164,52 @@ class DashboardPeriodTests(TestCase):
         self.assertContains(response, 'Maior alta')
 
 
+class ComparisonTests(TestCase):
+    # Testes da página que compara a evolução percentual das moedas em um único gráfico.
+    def test_comparison_page_builds_datasets_for_active_assets(self):
+        now = timezone.now()
+        bitcoin = CryptoAsset.objects.create(
+            name='Bitcoin',
+            symbol='BTC',
+            coingecko_id='bitcoin',
+            last_price_brl=Decimal('120.00'),
+            last_price_usd=Decimal('24.00'),
+            last_price_updated=now,
+        )
+        ethereum = CryptoAsset.objects.create(
+            name='Ethereum',
+            symbol='ETH',
+            coingecko_id='ethereum',
+            last_price_brl=Decimal('80.00'),
+            last_price_usd=Decimal('16.00'),
+            last_price_updated=now,
+        )
+        PriceHistory.objects.create(
+            asset=bitcoin,
+            price_brl=Decimal('100.00'),
+            price_usd=Decimal('20.00'),
+            recorded_at=now - timedelta(days=2),
+        )
+        PriceHistory.objects.create(
+            asset=ethereum,
+            price_brl=Decimal('100.00'),
+            price_usd=Decimal('20.00'),
+            recorded_at=now - timedelta(days=2),
+        )
+
+        response = self.client.get('/comparison/?period=week')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['selected_period'], 'week')
+        self.assertContains(response, 'Comparação')
+        self.assertContains(response, 'comparison-chart')
+        datasets = response.context['comparison_data']['datasets']
+        self.assertEqual(datasets[0]['label'], 'BTC')
+        self.assertEqual(datasets[0]['data'], [0.0, 20.0])
+        self.assertEqual(datasets[1]['label'], 'ETH')
+        self.assertEqual(datasets[1]['data'], [0.0, -20.0])
+
+
 class PricesApiTests(TestCase):
     # Testes do endpoint JSON usado pelo botão "Atualizar agora" e atualização automática.
     def test_prices_api_returns_saved_prices_without_refresh_when_recent(self):
@@ -181,3 +246,108 @@ class PricesApiTests(TestCase):
         self.assertTrue(payload['refreshed'])
         self.assertEqual(payload['updated_count'], 3)
         update_prices.assert_called_once()
+
+
+class AlertTests(TestCase):
+    # Testes da tela de alertas, incluindo ações que alteram registros.
+    def test_user_can_delete_own_alert(self):
+        user = get_user_model().objects.create_user(username='admin', password='pass12345')
+        asset = CryptoAsset.objects.create(
+            name='Bitcoin',
+            symbol='BTC',
+            coingecko_id='bitcoin',
+            last_price_brl=Decimal('120.00'),
+            last_price_usd=Decimal('24.00'),
+            last_price_updated=timezone.now(),
+        )
+        alert = PriceAlert.objects.create(
+            user=user,
+            asset=asset,
+            alert_type='above',
+            threshold_brl=Decimal('150.00'),
+        )
+
+        self.client.login(username='admin', password='pass12345')
+        response = self.client.post(f'/alerts/{alert.pk}/delete/')
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(PriceAlert.objects.filter(pk=alert.pk).exists())
+
+    def test_price_alert_form_shows_current_price_helpers(self):
+        user = get_user_model().objects.create_user(username='admin', password='pass12345')
+        CryptoAsset.objects.create(
+            name='Bitcoin',
+            symbol='BTC',
+            coingecko_id='bitcoin',
+            last_price_brl=Decimal('120.00'),
+            last_price_usd=Decimal('24.00'),
+            last_price_updated=timezone.now(),
+        )
+
+        self.client.login(username='admin', password='pass12345')
+        response = self.client.get('/alerts/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Preço atual')
+        self.assertContains(response, 'Usar atual')
+        self.assertContains(response, 'data-price-adjust="-1"')
+        self.assertContains(response, 'data-price-adjust="1"')
+
+    def test_simulation_alert_triggers_when_gain_reaches_threshold(self):
+        user = get_user_model().objects.create_user(username='admin', password='pass12345')
+        asset = CryptoAsset.objects.create(
+            name='Bitcoin',
+            symbol='BTC',
+            coingecko_id='bitcoin',
+            last_price_brl=Decimal('120.00'),
+            last_price_usd=Decimal('24.00'),
+            last_price_updated=timezone.now(),
+        )
+        simulation = Simulation.objects.create(
+            user=user,
+            asset=asset,
+            invested_amount_brl=Decimal('100.00'),
+            buy_date=timezone.now().date(),
+            purchased_price_brl=Decimal('100.00'),
+            crypto_amount=Decimal('1.000000000000'),
+        )
+        alert = SimulationAlert.objects.create(
+            user=user,
+            simulation=simulation,
+            alert_type='above',
+            threshold_percentage=Decimal('10.00'),
+        )
+
+        self.assertTrue(alert.check_trigger())
+        alert.refresh_from_db()
+        self.assertTrue(alert.triggered)
+
+    def test_user_can_create_simulation_alert_from_alerts_page(self):
+        user = get_user_model().objects.create_user(username='admin', password='pass12345')
+        asset = CryptoAsset.objects.create(
+            name='Bitcoin',
+            symbol='BTC',
+            coingecko_id='bitcoin',
+            last_price_brl=Decimal('120.00'),
+            last_price_usd=Decimal('24.00'),
+            last_price_updated=timezone.now(),
+        )
+        simulation = Simulation.objects.create(
+            user=user,
+            asset=asset,
+            invested_amount_brl=Decimal('100.00'),
+            buy_date=timezone.now().date(),
+            purchased_price_brl=Decimal('100.00'),
+            crypto_amount=Decimal('1.000000000000'),
+        )
+
+        self.client.login(username='admin', password='pass12345')
+        response = self.client.post('/alerts/', {
+            'form_type': 'simulation',
+            'simulation-simulation': simulation.pk,
+            'simulation-alert_type': 'above',
+            'simulation-threshold_percentage': '10.00',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(SimulationAlert.objects.filter(user=user, simulation=simulation).exists())

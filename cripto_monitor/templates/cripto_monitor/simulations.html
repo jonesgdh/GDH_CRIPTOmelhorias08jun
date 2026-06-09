@@ -1,11 +1,156 @@
 {% extends 'cripto_monitor/base.html' %}
 
 {% block content %}
+<style>
+    .simulation-summary-card {
+        overflow: hidden;
+    }
+
+    .simulation-form-card input,
+    .simulation-form-card select,
+    .simulation-form-card textarea {
+        box-sizing: border-box;
+        max-width: 100%;
+        width: 100%;
+    }
+
+    .simulation-form-card textarea {
+        min-height: 4.25rem;
+        resize: vertical;
+    }
+
+    .simulation-list {
+        display: grid;
+        gap: 0;
+    }
+
+    .simulation-item {
+        display: grid;
+        grid-template-columns: minmax(4rem, .75fr) repeat(5, minmax(0, 1fr)) minmax(8rem, .85fr);
+        gap: .75rem;
+        align-items: center;
+        padding: 1rem 0;
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+
+    .simulation-item:first-child {
+        padding-top: .25rem;
+    }
+
+    .simulation-item:last-child {
+        border-bottom: 0;
+        padding-bottom: 0;
+    }
+
+    .simulation-field {
+        min-width: 0;
+    }
+
+    .simulation-label {
+        color: var(--bs-secondary-color);
+        display: block;
+        font-size: .72rem;
+        font-weight: 700;
+        line-height: 1.1;
+        margin-bottom: .18rem;
+        text-transform: uppercase;
+    }
+
+    .simulation-value {
+        display: block;
+        font-size: .96rem;
+        font-weight: 600;
+        line-height: 1.3;
+        overflow-wrap: anywhere;
+    }
+
+    .simulation-coin {
+        font-size: 1rem;
+        font-weight: 800;
+    }
+
+    .simulation-date {
+        color: var(--bs-secondary-color);
+        display: block;
+        font-weight: 500;
+        margin-top: .1rem;
+    }
+
+    .simulation-actions {
+        display: grid;
+        gap: .45rem;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        max-width: 5.5rem;
+    }
+
+    .simulation-actions form {
+        margin: 0;
+    }
+
+    .simulation-actions .btn {
+        aspect-ratio: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        min-width: 0;
+        padding: .35rem;
+        width: 100%;
+    }
+
+    @media (max-width: 1399.98px) {
+        .simulation-item {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            align-items: start;
+        }
+
+        .simulation-actions {
+            grid-column: 1 / -1;
+        }
+    }
+
+    @media (max-width: 575.98px) {
+        .simulation-item {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: .8rem .7rem;
+        }
+
+        .simulation-field.is-result,
+        .simulation-field.is-actions {
+            grid-column: 1 / -1;
+        }
+
+        .simulation-actions {
+            max-width: 5.5rem;
+        }
+    }
+
+    @media (max-width: 380px) {
+        .simulation-form-card .btn {
+            width: 100%;
+        }
+
+        .simulation-item {
+            grid-template-columns: 1fr;
+        }
+
+        .simulation-field.is-result,
+        .simulation-field.is-actions {
+            grid-column: auto;
+        }
+
+        .simulation-actions {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
 <h1>Simulações de Investimento</h1>
 <div class="row">
     {# Formulário usado tanto para criar uma simulação nova quanto para editar uma existente. #}
-    <div class="col-lg-5">
-        <div class="card shadow-sm mb-4">
+    <div class="col-xl-4">
+        <div class="card shadow-sm mb-4 simulation-form-card">
             <div class="card-body">
                 <h5 class="card-title">{% if editing_simulation %}Alterar Simulação{% else %}Nova Simulação{% endif %}</h5>
                 <form method="post" novalidate>
@@ -28,55 +173,59 @@
         </div>
     </div>
     {# Resumo das simulações salvas pelo usuário logado. #}
-    <div class="col-lg-7">
-        <div class="card shadow-sm mb-4">
+    <div class="col-xl-8">
+        <div class="card shadow-sm mb-4 simulation-summary-card">
             <div class="card-body">
                 <h5 class="card-title">Resumo das Simulações</h5>
                 {% if simulations %}
-                <div class="table-responsive">
-                    <table class="table align-middle">
-                        <thead>
-                            <tr>
-                                <th>Moeda</th>
-                                <th>Investido</th>
-                                <th>Compra</th>
-                                <th>Qtd. simulada</th>
-                                <th>Valor atual</th>
-                                <th>Lucro/Prejuízo</th>
-                                <th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for sim in simulations %}
-                            {# O valor atual e lucro/prejuízo são propriedades calculadas no model Simulation. #}
-                            <tr>
-                                <td>{{ sim.asset.symbol }}</td>
-                                <td>R$ {{ sim.invested_amount_brl|floatformat:2 }}</td>
-                                <td>R$ {{ sim.purchased_price_brl|floatformat:2 }} em {{ sim.buy_date|date:'d/m/Y' }}</td>
-                                <td>{{ sim.crypto_amount|floatformat:6 }}</td>
-                                <td>R$ {{ sim.current_value_brl|floatformat:2 }}</td>
-                                <td>
-                                    {% if sim.gain_loss_brl >= 0 %}
-                                        <span class="text-success">R$ {{ sim.gain_loss_brl|floatformat:2 }} (+{{ sim.gain_loss_percentage|floatformat:2 }}%)</span>
-                                    {% else %}
-                                        <span class="text-danger">R$ {{ sim.gain_loss_brl|floatformat:2 }} ({{ sim.gain_loss_percentage|floatformat:2 }}%)</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <div class="d-flex gap-2 flex-wrap">
-                                        {# Editar recarrega a página com os dados da simulação preenchidos no formulário. #}
-                                        <a href="{% url 'cripto_monitor:simulations' %}?edit={{ sim.pk }}" class="btn btn-sm btn-outline-primary">Editar</a>
-                                        {# Remoção usa POST com CSRF para evitar exclusão por link acidental. #}
-                                        <form method="post" action="{% url 'cripto_monitor:delete_simulation' sim.pk %}" onsubmit="return confirm('Limpar esta simulação?');">
-                                            {% csrf_token %}
-                                            <button type="submit" class="btn btn-sm btn-outline-danger">Limpar</button>
-                                        </form>
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                <div class="simulation-list">
+                    {% for sim in simulations %}
+                    {# O valor atual e lucro/prejuízo são propriedades calculadas no model Simulation. #}
+                    <div class="simulation-item">
+                        <div class="simulation-field">
+                            <span class="simulation-label">Moeda</span>
+                            <span class="simulation-value simulation-coin">{{ sim.asset.symbol }}</span>
+                        </div>
+                        <div class="simulation-field">
+                            <span class="simulation-label">Investido</span>
+                            <span class="simulation-value">R$ {{ sim.invested_amount_brl|floatformat:2 }}</span>
+                        </div>
+                        <div class="simulation-field">
+                            <span class="simulation-label">Compra</span>
+                            <span class="simulation-value">R$ {{ sim.purchased_price_brl|floatformat:2 }} <span class="simulation-date">em {{ sim.buy_date|date:'d/m/Y' }}</span></span>
+                        </div>
+                        <div class="simulation-field">
+                            <span class="simulation-label">Qtd. simulada</span>
+                            <span class="simulation-value">{{ sim.crypto_amount|floatformat:6 }}</span>
+                        </div>
+                        <div class="simulation-field">
+                            <span class="simulation-label">Valor atual</span>
+                            <span class="simulation-value">R$ {{ sim.current_value_brl|floatformat:2 }}</span>
+                        </div>
+                        <div class="simulation-field is-result">
+                            <span class="simulation-label">Lucro/Prejuízo</span>
+                            <span class="simulation-value">
+                                {% if sim.gain_loss_brl >= 0 %}
+                                    <span class="text-success">R$ {{ sim.gain_loss_brl|floatformat:2 }} (+{{ sim.gain_loss_percentage|floatformat:2 }}%)</span>
+                                {% else %}
+                                    <span class="text-danger">R$ {{ sim.gain_loss_brl|floatformat:2 }} ({{ sim.gain_loss_percentage|floatformat:2 }}%)</span>
+                                {% endif %}
+                            </span>
+                        </div>
+                        <div class="simulation-field is-actions">
+                            <span class="simulation-label">Ações</span>
+                            <div class="simulation-actions">
+                                {# Editar recarrega a página com os dados da simulação preenchidos no formulário. #}
+                                <a href="{% url 'cripto_monitor:simulations' %}?edit={{ sim.pk }}" class="btn btn-sm btn-outline-primary" aria-label="Editar simulação" title="Editar">E</a>
+                                {# Remoção usa POST com CSRF para evitar exclusão por link acidental. #}
+                                <form method="post" action="{% url 'cripto_monitor:delete_simulation' sim.pk %}" onsubmit="return confirm('Limpar esta simulação?');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Limpar simulação" title="Limpar">L</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
                 </div>
                 {% else %}
                     <p>Nenhuma simulação cadastrada ainda.</p>

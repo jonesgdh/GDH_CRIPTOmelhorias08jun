@@ -10,14 +10,18 @@ COINGECKO_API_BASE = 'https://api.coingecko.com/api/v3'
 
 # Moedas que o GDH Cripto monitora por padrão.
 # coingecko_id precisa bater com o identificador oficial da CoinGecko.
+# Lista baseada nas maiores criptomoedas por valor de mercado, evitando tokens wrapped/staked.
 SUPPORTED_ASSETS = [
     {'name': 'Bitcoin', 'symbol': 'BTC', 'coingecko_id': 'bitcoin'},
     {'name': 'Ethereum', 'symbol': 'ETH', 'coingecko_id': 'ethereum'},
-    {'name': 'Solana', 'symbol': 'SOL', 'coingecko_id': 'solana'},
-    {'name': 'Monero', 'symbol': 'XMR', 'coingecko_id': 'monero'},
-    {'name': 'Bitcoin Cash', 'symbol': 'BCH', 'coingecko_id': 'bitcoin-cash'},
-    {'name': 'BNB', 'symbol': 'BNB', 'coingecko_id': 'binancecoin'},
+    {'name': 'Tether', 'symbol': 'USDT', 'coingecko_id': 'tether'},
     {'name': 'XRP', 'symbol': 'XRP', 'coingecko_id': 'ripple'},
+    {'name': 'BNB', 'symbol': 'BNB', 'coingecko_id': 'binancecoin'},
+    {'name': 'Solana', 'symbol': 'SOL', 'coingecko_id': 'solana'},
+    {'name': 'USDC', 'symbol': 'USDC', 'coingecko_id': 'usd-coin'},
+    {'name': 'TRON', 'symbol': 'TRX', 'coingecko_id': 'tron'},
+    {'name': 'Dogecoin', 'symbol': 'DOGE', 'coingecko_id': 'dogecoin'},
+    {'name': 'Cardano', 'symbol': 'ADA', 'coingecko_id': 'cardano'},
 ]
 
 
@@ -35,6 +39,9 @@ def ensure_supported_assets():
     asset_ids = [asset_data['coingecko_id'] for asset_data in SUPPORTED_ASSETS]
     existing_assets = CryptoAsset.objects.in_bulk(asset_ids, field_name='coingecko_id')
 
+    # Mantém o dashboard limitado à lista oficial atual, sem apagar histórico ou simulações antigas.
+    CryptoAsset.objects.exclude(coingecko_id__in=asset_ids).filter(active=True).update(active=False)
+
     for asset_data in SUPPORTED_ASSETS:
         asset = existing_assets.get(asset_data['coingecko_id'])
         if asset is None:
@@ -48,7 +55,12 @@ def ensure_supported_assets():
             # Atualiza nome/símbolo apenas quando a definição local mudou.
             asset.name = asset_data['name']
             asset.symbol = asset_data['symbol']
-            asset.save(update_fields=['name', 'symbol'])
+            asset.active = True
+            asset.save(update_fields=['name', 'symbol', 'active'])
+        elif not asset.active:
+            # Reativa moedas que voltarem para a lista oficial.
+            asset.active = True
+            asset.save(update_fields=['active'])
         assets.append(asset)
     return assets
 

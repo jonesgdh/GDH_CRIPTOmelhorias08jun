@@ -10,8 +10,8 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from .forms import PriceAlertForm, SimulationForm
-from .models import CryptoAsset, PriceAlert, PriceHistory, SimulatedTrade, Simulation
+from .forms import PriceAlertForm, SimulationAlertForm, SimulationForm
+from .models import CryptoAsset, PriceAlert, PriceHistory, SimulatedTrade, Simulation, SimulationAlert
 from .services import (
     SUPPORTED_ASSETS,
     ensure_supported_assets,
@@ -49,6 +49,19 @@ PERIOD_OPTIONS = {
         'delta': timedelta(days=30),
     },
 }
+
+COMPARISON_COLORS = [
+    '#f7931a',
+    '#627eea',
+    '#26a17b',
+    '#8f98a8',
+    '#f3ba2f',
+    '#14f195',
+    '#2775ca',
+    '#ff4f6d',
+    '#c2a633',
+    '#3468d1',
+]
 
 
 # Mantém a ordem visual das moedas igual à ordem definida em services.SUPPORTED_ASSETS.
@@ -171,6 +184,60 @@ def build_period_chart_points(asset, since):
         points.append((timezone.now(), Decimal('0')))
 
     return points
+
+
+def build_comparison_chart_data(assets, since):
+    # Normaliza cada moeda para 0% no primeiro ponto do período, permitindo comparar preços diferentes.
+    datasets = []
+    longest_labels = []
+    rows = []
+
+    for index, asset in enumerate(assets):
+        points = build_period_chart_points(asset, since)
+        valid_points = [
+            (recorded_at, price)
+            for recorded_at, price in points
+            if price is not None and price > 0
+        ]
+        if not valid_points:
+            continue
+
+        base_price = valid_points[0][1]
+        values = [
+            float((price / base_price - 1) * Decimal('100'))
+            for recorded_at, price in valid_points
+        ]
+        labels = [recorded_at.strftime('%d/%m %H:%M') for recorded_at, price in valid_points]
+        color = COMPARISON_COLORS[index % len(COMPARISON_COLORS)]
+        final_change = Decimal(str(values[-1]))
+
+        if len(labels) > len(longest_labels):
+            longest_labels = labels
+
+        datasets.append({
+            'label': asset.symbol,
+            'assetName': asset.name,
+            'data': values,
+            'borderColor': color,
+            'backgroundColor': color,
+            'pointRadius': 2,
+            'pointHoverRadius': 5,
+            'borderWidth': 2,
+            'tension': 0.28,
+        })
+        rows.append({
+            'asset': asset,
+            'color': color,
+            'final_change': final_change,
+            'is_positive': final_change >= 0,
+        })
+
+    rows.sort(key=lambda row: row['final_change'], reverse=True)
+    return {
+        'labels': longest_labels,
+        'datasets': datasets,
+        'rows': rows,
+    }
 
 
 def build_candles(points):
@@ -518,6 +585,28 @@ def dashboard(request):
     })
 
 
+def comparison(request):
+    # Página dedicada a comparar a evolução percentual das 10 moedas monitoradas.
+    ensure_supported_assets()
+    selected_period = get_selected_period(request.GET.get('period'))
+    period_option = PERIOD_OPTIONS[selected_period]
+    since = timezone.now() - period_option['delta']
+    assets = sort_supported_assets(CryptoAsset.objects.filter(active=True))
+    comparison_data = build_comparison_chart_data(assets, since)
+
+    return render(request, 'cripto_monitor/comparison.html', {
+        'assets': assets,
+        'comparison_data': comparison_data,
+        'comparison_data_json': json.dumps({
+            'labels': comparison_data['labels'],
+            'datasets': comparison_data['datasets'],
+        }),
+        'period_options': PERIOD_OPTIONS,
+        'selected_period': selected_period,
+        'variation_label': period_option['variation_label'],
+    })
+
+
 @login_required
 def simulations(request):
     ensure_supported_assets()
@@ -618,23 +707,52 @@ def delete_simulation(request, pk):
 @login_required
 def alerts(request):
     ensure_supported_assets()
-    form = PriceAlertForm(request.POST or None)
-    if request.method == 'POST' and form.is_valid():
+    form_type = request.POST.get('form_type')
+    price_form_data = request.POST if request.method == 'POST' and form_type == 'price' else None
+    simulation_form_data = request.POST if request.method == 'POST' and form_type == 'simulation' else None
+    form = PriceAlertForm(price_form_data, prefix='price')
+    simulation_form = SimulationAlertForm(
+        simulation_form_data,
+        prefix='simulation',
+        user=request.user,
+    )
+    if request.method == 'POST' and form_type == 'price' and form.is_valid():
         # O alerta fica ligado ao usuário logado para separar regras pessoais.
         alert = form.save(commit=False)
         alert.user = request.user
         alert.save()
         messages.success(request, 'Alerta cadastrado com sucesso.')
         return redirect('cripto_monitor:alerts')
+    if request.method == 'POST' and form_type == 'simulation' and simulation_form.is_valid():
+        # O alerta de simulação observa o ganho/prejuízo percentual da carteira simulada.
+        simulation_alert = simulation_form.save(commit=False)
+        simulation_alert.user = request.user
+        simulation_alert.save()
+        messages.success(request, 'Alerta de simulação cadastrado com sucesso.')
+        return redirect('cripto_monitor:alerts')
 
     alerts = PriceAlert.objects.select_related('asset').filter(Q(user=request.user) | Q(user__isnull=True))
     for alert in alerts:
         # Ao abrir a página, conferimos se algum alerta ativo já atingiu o preço limite.
         alert.check_trigger()
+    simulation_alerts = SimulationAlert.objects.select_related('simulation', 'simulation__asset').filter(user=request.user)
+    for simulation_alert in simulation_alerts:
+        # Também conferimos se alguma simulação atingiu o ganho/prejuízo configurado.
+        simulation_alert.check_trigger()
+    price_alert_assets = {
+        str(asset.pk): {
+            'symbol': asset.symbol,
+            'price_brl': float(asset.last_price_brl) if asset.last_price_brl is not None else None,
+        }
+        for asset in CryptoAsset.objects.filter(active=True)
+    }
 
     return render(request, 'cripto_monitor/alerts.html', {
         'form': form,
         'alerts': alerts,
+        'price_alert_assets_json': json.dumps(price_alert_assets),
+        'simulation_form': simulation_form,
+        'simulation_alerts': simulation_alerts,
     })
 
 
@@ -644,4 +762,23 @@ def trigger_alert(request, pk):
     # Atalho manual para encerrar um alerta sem esperar uma nova cotação.
     alert.mark_triggered()
     messages.success(request, 'Alerta marcado como disparado.')
+    return redirect('cripto_monitor:alerts')
+
+
+@login_required
+def delete_alert(request, pk):
+    alert = get_object_or_404(PriceAlert, pk=pk, user=request.user)
+    if request.method == 'POST':
+        # A exclusão é limitada ao dono do alerta e só acontece via POST.
+        alert.delete()
+        messages.success(request, 'Alerta removido com sucesso.')
+    return redirect('cripto_monitor:alerts')
+
+
+@login_required
+def delete_simulation_alert(request, pk):
+    simulation_alert = get_object_or_404(SimulationAlert, pk=pk, user=request.user)
+    if request.method == 'POST':
+        simulation_alert.delete()
+        messages.success(request, 'Alerta de simulação removido com sucesso.')
     return redirect('cripto_monitor:alerts')

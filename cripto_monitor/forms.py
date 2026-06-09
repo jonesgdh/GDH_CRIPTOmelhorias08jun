@@ -1,6 +1,6 @@
 from django import forms
 from django.utils import timezone
-from .models import CryptoAsset, PriceAlert
+from .models import CryptoAsset, PriceAlert, Simulation, SimulationAlert
 
 
 class SimulationForm(forms.Form):
@@ -39,10 +39,30 @@ class PriceAlertForm(forms.ModelForm):
         fields = ['asset', 'alert_type', 'threshold_brl']
         widgets = {
             # Permite digitar valores monetários com centavos.
-            'threshold_brl': forms.NumberInput(attrs={'step': '0.01'}),
+            'threshold_brl': forms.NumberInput(attrs={'step': '0.01', 'class': 'form-control'}),
         }
         labels = {
             'asset': 'Moeda',
             'alert_type': 'Tipo de alerta',
             'threshold_brl': 'Limite em BRL',
+        }
+
+
+class SimulationAlertForm(forms.ModelForm):
+    # Formulário para alertas baseados no ganho/prejuízo percentual de uma simulação.
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if user is not None:
+            self.fields['simulation'].queryset = Simulation.objects.select_related('asset').filter(user=user)
+
+    class Meta:
+        model = SimulationAlert
+        fields = ['simulation', 'alert_type', 'threshold_percentage']
+        widgets = {
+            'threshold_percentage': forms.NumberInput(attrs={'step': '0.01'}),
+        }
+        labels = {
+            'simulation': 'Simulação',
+            'alert_type': 'Tipo de alerta',
+            'threshold_percentage': 'Limite em %',
         }

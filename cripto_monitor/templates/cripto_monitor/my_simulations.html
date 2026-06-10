@@ -1,0 +1,73 @@
+{% extends 'cripto_monitor/base.html' %}
+
+{% block content %}
+<style>
+    .my-simulations-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(18rem, 26rem);
+        gap: 1rem;
+        align-items: start;
+    }
+
+    .my-simulations-panel {
+        border: 1px solid var(--bs-border-color);
+        border-radius: 8px;
+        padding: clamp(1rem, 2vw, 1.5rem);
+    }
+
+    .signup-form p {
+        margin-bottom: 1rem;
+    }
+
+    .signup-form label {
+        font-weight: 700;
+        margin-bottom: .35rem;
+    }
+
+    .signup-form input {
+        max-width: 100%;
+    }
+
+    .signup-form .helptext {
+        color: var(--bs-secondary-color);
+        display: block;
+        font-size: .82rem;
+        margin-top: .35rem;
+    }
+
+    .signup-form ul {
+        color: var(--bs-secondary-color);
+        font-size: .82rem;
+        margin-top: .35rem;
+        padding-left: 1.1rem;
+    }
+
+    @media (max-width: 767.98px) {
+        .my-simulations-layout {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<div class="my-simulations-layout">
+    <section>
+        <h1>Minhas Simulações</h1>
+        <p class="text-body-secondary fw-semibold">
+            Crie um usuário para salvar suas simulações, acompanhar lucro/prejuízo e configurar alertas pessoais.
+        </p>
+    </section>
+
+    <section class="my-simulations-panel">
+        <h2 class="h4 mb-3">Criar acesso</h2>
+        <form method="post" class="signup-form" novalidate>
+            {% csrf_token %}
+            {{ form.as_p }}
+            <button class="btn btn-primary w-100" type="submit">Criar usuário</button>
+        </form>
+        <div class="mt-3 text-body-secondary">
+            Já tem cadastro?
+            <a href="{% url 'login' %}">Entrar</a>
+        </div>
+    </section>
+</div>
+{% endblock %}

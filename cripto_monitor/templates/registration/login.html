@@ -6,16 +6,27 @@
         <h2>Entrar</h2>
         <form method="post">
             {% csrf_token %}
+            {% if form.non_field_errors %}
+                <div class="alert alert-danger">
+                    {{ form.non_field_errors }}
+                </div>
+            {% endif %}
             <div class="mb-3">
                 <label for="id_username" class="form-label">Usuário</label>
-                <input type="text" name="username" autofocus required id="id_username" class="form-control">
+                <input type="text" name="username" value="{{ form.username.value|default:'' }}" autofocus required id="id_username" class="form-control{% if form.username.errors %} is-invalid{% endif %}">
+                {% for error in form.username.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
             </div>
             <div class="mb-3">
                 <label for="id_password" class="form-label">Senha</label>
                 <div class="input-group">
-                    <input type="password" name="password" required id="id_password" class="form-control">
+                    <input type="password" name="password" required id="id_password" class="form-control{% if form.password.errors %} is-invalid{% endif %}">
                     <button type="button" id="toggle-password" class="btn btn-outline-secondary" aria-label="Mostrar senha">🔒</button>
                 </div>
+                {% for error in form.password.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
             </div>
             <button class="btn btn-primary" type="submit">Entrar</button>
         </form>

@@ -210,6 +210,107 @@ class ComparisonTests(TestCase):
         self.assertEqual(datasets[1]['data'], [0.0, -20.0])
 
 
+class MySimulationsTests(TestCase):
+    # Testes da porta de entrada da área pessoal de simulações.
+    def test_guest_sees_signup_page_from_menu(self):
+        response = self.client.get('/minhas-simulacoes/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Minhas Simulações')
+        self.assertContains(response, 'Criar usuário')
+
+        dashboard = self.client.get('/')
+        self.assertContains(dashboard, 'Minhas Simulações')
+
+    def test_signup_creates_user_and_redirects_to_simulations(self):
+        response = self.client.post('/minhas-simulacoes/', {
+            'username': 'Visitante 1',
+            'password1': 'abcd',
+            'password2': 'abcd',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], '/simulations/')
+        self.assertTrue(get_user_model().objects.filter(username='Visitante 1').exists())
+
+    def test_signup_rejects_existing_username(self):
+        get_user_model().objects.create_user(username='Visitante 1', password='pass12345')
+
+        response = self.client.post('/minhas-simulacoes/', {
+            'username': 'visitante 1',
+            'password1': 'abcd',
+            'password2': 'abcd',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Este nome de usuário já está cadastrado.')
+
+    def test_signup_rejects_password_shorter_than_four_characters(self):
+        response = self.client.post('/minhas-simulacoes/', {
+            'username': 'visitante curto',
+            'password1': 'abc',
+            'password2': 'abc',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(get_user_model().objects.filter(username='visitante curto').exists())
+
+    def test_authenticated_user_goes_to_simulations(self):
+        get_user_model().objects.create_user(username='admin', password='pass12345')
+        self.client.login(username='admin', password='pass12345')
+
+        response = self.client.get('/minhas-simulacoes/')
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], '/simulations/')
+
+    def test_simulations_page_shows_logged_username(self):
+        get_user_model().objects.create_user(username='investidor', password='pass12345')
+        self.client.login(username='investidor', password='pass12345')
+
+        response = self.client.get('/simulations/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Simulando como')
+        self.assertContains(response, 'investidor')
+        self.assertContains(response, 'Sair')
+        self.assertContains(response, 'method="post" action="/accounts/logout/"')
+
+    def test_logout_page_shows_logo_and_signup_message(self):
+        get_user_model().objects.create_user(username='investidor', password='pass12345')
+        self.client.login(username='investidor', password='pass12345')
+
+        response = self.client.post('/accounts/logout/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'GDH_CRIPTO.png')
+        self.assertContains(response, 'É necessário criar usuário e senha para fazer as simulações')
+        self.assertContains(response, 'Criar usuário')
+
+
+class LoginTests(TestCase):
+    # Testes das mensagens específicas de erro na tela de entrada.
+    def test_login_shows_username_not_found(self):
+        response = self.client.post('/accounts/login/', {
+            'username': 'naoexiste',
+            'password': 'abcd',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Usuário não existe.')
+
+    def test_login_shows_wrong_password(self):
+        get_user_model().objects.create_user(username='visitante', password='abcd')
+
+        response = self.client.post('/accounts/login/', {
+            'username': 'visitante',
+            'password': 'errada',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Senha incorreta.')
+
+
 class PricesApiTests(TestCase):
     # Testes do endpoint JSON usado pelo botão "Atualizar agora" e atualização automática.
     def test_prices_api_returns_saved_prices_without_refresh_when_recent(self):

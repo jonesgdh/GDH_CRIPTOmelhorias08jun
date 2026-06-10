@@ -4,13 +4,14 @@ from decimal import Decimal
 
 import requests
 from django.contrib import messages
+from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from .forms import PriceAlertForm, SimulationAlertForm, SimulationForm
+from .forms import PriceAlertForm, SignUpForm, SimulationAlertForm, SimulationForm
 from .models import CryptoAsset, PriceAlert, PriceHistory, SimulatedTrade, Simulation, SimulationAlert
 from .services import (
     SUPPORTED_ASSETS,
@@ -605,6 +606,30 @@ def comparison(request):
         'selected_period': selected_period,
         'variation_label': period_option['variation_label'],
     })
+
+
+def my_simulations(request):
+    # Porta de entrada da área pessoal: cadastra novos usuários ou leva logados às simulações.
+    if request.user.is_authenticated:
+        return redirect('cripto_monitor:simulations')
+
+    form = SignUpForm(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        user = form.save()
+        login(request, user)
+        messages.success(request, 'Cadastro criado. Agora você pode salvar suas simulações.')
+        return redirect('cripto_monitor:simulations')
+
+    return render(request, 'cripto_monitor/my_simulations.html', {
+        'form': form,
+    })
+
+
+def app_logout(request):
+    # Mostra a tela de saída do sistema após encerrar a sessão.
+    if request.user.is_authenticated:
+        logout(request)
+    return render(request, 'cripto_monitor/logged_out.html')
 
 
 @login_required

@@ -116,6 +116,17 @@
             background: #20242d;
         }
 
+        .app-nav-form {
+            margin: 0;
+        }
+
+        .app-nav-button {
+            border: 0;
+            width: 100%;
+            text-align: left;
+            background: transparent;
+        }
+
         .app-nav-icon {
             width: 1.35rem;
             color: #d7a846;
@@ -258,7 +269,7 @@
         <nav class="app-nav">
             <a class="app-nav-link" href="{% url 'cripto_monitor:dashboard' %}"><span class="app-nav-icon">D</span>Dashboard</a>
             <a class="app-nav-link" href="{% url 'cripto_monitor:comparison' %}"><span class="app-nav-icon">C</span>Comparação</a>
-            <a class="app-nav-link" href="{% url 'cripto_monitor:simulations' %}"><span class="app-nav-icon">S</span>Simulações</a>
+            <a class="app-nav-link" href="{% url 'cripto_monitor:my_simulations' %}"><span class="app-nav-icon">M</span>Minhas Simulações</a>
             <a class="app-nav-link" href="{% url 'cripto_monitor:alerts' %}"><span class="app-nav-icon">A</span>Alertas</a>
             {% if user.is_staff %}
                 <a class="app-nav-link" href="{% url 'admin:index' %}"><span class="app-nav-icon">G</span>Admin Django</a>
@@ -271,7 +282,10 @@
         <div class="app-sidebar-footer">
             {% if user.is_authenticated %}
                 <div class="app-user">{{ user.username }}</div>
-                <a class="app-nav-link" href="{% url 'logout' %}"><span class="app-nav-icon">L</span>Sair</a>
+                <form class="app-nav-form" method="post" action="{% url 'logout' %}">
+                    {% csrf_token %}
+                    <button class="app-nav-link app-nav-button" type="submit"><span class="app-nav-icon">L</span>Sair</button>
+                </form>
             {% else %}
                 <a class="app-nav-link" href="{% url 'login' %}"><span class="app-nav-icon">E</span>Entrar</a>
             {% endif %}
@@ -300,7 +314,7 @@
             <nav class="app-nav">
                 <a class="app-nav-link" href="{% url 'cripto_monitor:dashboard' %}"><span class="app-nav-icon">D</span>Dashboard</a>
                 <a class="app-nav-link" href="{% url 'cripto_monitor:comparison' %}"><span class="app-nav-icon">C</span>Comparação</a>
-                <a class="app-nav-link" href="{% url 'cripto_monitor:simulations' %}"><span class="app-nav-icon">S</span>Simulações</a>
+                <a class="app-nav-link" href="{% url 'cripto_monitor:my_simulations' %}"><span class="app-nav-icon">M</span>Minhas Simulações</a>
                 <a class="app-nav-link" href="{% url 'cripto_monitor:alerts' %}"><span class="app-nav-icon">A</span>Alertas</a>
                 {% if user.is_staff %}
                     <a class="app-nav-link" href="{% url 'admin:index' %}"><span class="app-nav-icon">G</span>Admin Django</a>
@@ -311,7 +325,10 @@
                 </div>
                 {% if user.is_authenticated %}
                     <span class="app-user">{{ user.username }}</span>
-                    <a class="app-nav-link" href="{% url 'logout' %}"><span class="app-nav-icon">L</span>Sair</a>
+                    <form class="app-nav-form" method="post" action="{% url 'logout' %}">
+                        {% csrf_token %}
+                        <button class="app-nav-link app-nav-button" type="submit"><span class="app-nav-icon">L</span>Sair</button>
+                    </form>
                 {% else %}
                     <a class="app-nav-link" href="{% url 'login' %}"><span class="app-nav-icon">E</span>Entrar</a>
                 {% endif %}
